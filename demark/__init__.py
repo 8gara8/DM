@@ -1,0 +1,1 @@
+"""DeMark Indicators Daily Monitor."""

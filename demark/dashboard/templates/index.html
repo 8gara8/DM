@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeMark Monitor — Dashboard</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --red: #f85149;
+            --yellow: #d29922;
+            --green: #3fb950;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 24px;
+            line-height: 1.5;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 4px; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px; }
+        .section { margin-bottom: 32px; }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        tr:hover { background: rgba(88, 166, 255, 0.04); }
+        .ticker-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .ticker-link:hover { text-decoration: underline; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-buy { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+        .badge-sell { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+        .badge-setup { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
+        .badge-countdown { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+        .alert-row { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+        .alert-row:last-child { border-bottom: none; }
+        .alert-time { color: var(--text-muted); font-size: 0.75rem; margin-left: 8px; }
+        .empty { color: var(--text-muted); font-style: italic; padding: 16px 0; }
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            min-width: 140px;
+        }
+        .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .stat-label { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+        .priority-critical { color: var(--red); }
+        .priority-warning { color: var(--yellow); }
+        .priority-info { color: var(--green); }
+    </style>
+</head>
+<body>
+    <h1>DeMark Indicators Monitor</h1>
+    <p class="subtitle">Last updated: {{ now }}</p>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-value">{{ tickers|length }}</div>
+            <div class="stat-label">Tickers</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ signals|length }}</div>
+            <div class="stat-label">Active Signals</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ alerts|length }}</div>
+            <div class="stat-label">Recent Alerts</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Active Signals</div>
+        {% if signals %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Timeframe</th>
+                    <th>Type</th>
+                    <th>Direction</th>
+                    <th>Count</th>
+                    <th>Perfected</th>
+                    <th>TDST Level</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in signals %}
+                <tr>
+                    <td><a class="ticker-link" href="/ticker/{{ s.ticker }}">{{ s.ticker }}</a></td>
+                    <td>{{ s.timeframe|title }}</td>
+                    <td>
+                        <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
+                            {{ s.indicator_type|title }} {{ s.phase|title }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {% if s.direction == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
+                            {{ s.direction|title }}
+                        </span>
+                    </td>
+                    <td>{{ s.count_display }}</td>
+                    <td>{{ s.perfected_display }}</td>
+                    <td>{{ s.tdst_display }}</td>
+                    <td>{{ s.status }}</td>
+                    <td>{{ s.last_updated[:10] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No active signals. Run a scan to populate data.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Recent Alerts</div>
+        {% if alerts %}
+        {% for a in alerts %}
+        <div class="alert-row">
+            <span class="priority-{{ a.priority }}">{{ a.icon }}</span>
+            {{ a.message }}
+            <span class="alert-time">{{ a.triggered_at[:19] }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="empty">No alerts yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Watchlist</div>
+        {% if tickers %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Tags</th>
+                    <th>Added</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tickers %}
+                <tr>
+                    <td><a class="ticker-link" href="/ticker/{{ t.ticker }}">{{ t.ticker }}</a></td>
+                    <td>{{ t.tags|join(', ') }}</td>
+                    <td>{{ t.added_at[:10] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">Watchlist is empty. Use <code>demark add</code> to add tickers.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

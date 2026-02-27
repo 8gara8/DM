@@ -1,0 +1,40 @@
+data_source:
+  provider: yfinance
+  api_key: null
+
+database:
+  path: ./demark_monitor.db
+
+watchlist:
+  default_tickers:
+    - SPY
+    - QQQ
+    - BTC-USD
+    - GLD
+
+timeframes:
+  - daily
+  - weekly
+  - monthly
+  - yearly
+
+alerts:
+  approaching_setup_threshold: 7
+  approaching_countdown_threshold: 11
+
+  dashboard:
+    enabled: true
+    host: "0.0.0.0"
+    port: 8050
+    auto_open_browser: true
+
+  slack:
+    enabled: false
+    webhook_url: null
+
+  console:
+    enabled: true
+
+schedule:
+  run_time: "06:00"
+  timezone: "Asia/Taipei"
