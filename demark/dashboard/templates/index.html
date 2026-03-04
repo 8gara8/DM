@@ -3,199 +3,509 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeMark Monitor — Dashboard</title>
+    <title>DeMark Monitor</title>
     <style>
         :root {
             --bg: #0d1117;
             --surface: #161b22;
+            --surface-hover: #1c2129;
             --border: #30363d;
+            --border-light: #21262d;
             --text: #e6edf3;
             --text-muted: #8b949e;
+            --text-dim: #484f58;
             --accent: #58a6ff;
+            --accent-dim: rgba(88,166,255,0.12);
             --red: #f85149;
+            --red-dim: rgba(248,81,73,0.12);
             --yellow: #d29922;
+            --yellow-dim: rgba(210,153,34,0.12);
             --green: #3fb950;
+            --green-dim: rgba(63,185,80,0.12);
+            --purple: #bc8cff;
+            --purple-dim: rgba(188,140,255,0.12);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
-            padding: 24px;
             line-height: 1.5;
+            min-height: 100vh;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 4px; }
-        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px; }
-        .section { margin-bottom: 32px; }
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
+
+        /* --- Layout --- */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 32px;
             border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
+        .topbar h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+        .refresh-indicator {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .refresh-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+        /* --- Stats row --- */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-top: 2px;
+        }
+        .stat-value.green { color: var(--green); }
+        .stat-value.yellow { color: var(--yellow); }
+        .stat-value.red { color: var(--red); }
+
+        /* --- Toolbar --- */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .toolbar input, .toolbar select {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+        }
+        .toolbar input:focus, .toolbar select:focus {
+            border-color: var(--accent);
+        }
+        .toolbar input { width: 200px; }
+        .toolbar label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* --- Section --- */
+        .section { margin-bottom: 32px; }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .section-count {
+            background: var(--accent-dim);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        /* --- Signal cards grid --- */
+        .signal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 12px;
+        }
+        .signal-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            transition: border-color 0.15s, background 0.15s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .signal-card:hover {
+            border-color: var(--accent);
+            background: var(--surface-hover);
+        }
+        .signal-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .signal-ticker {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .signal-timeframe {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: var(--border-light);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .signal-card-body { display: flex; flex-direction: column; gap: 8px; }
+        .signal-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .signal-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .signal-val { font-size: 0.85rem; font-weight: 600; }
+
+        /* --- Badges --- */
+        .badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .badge-buy { background: var(--green-dim); color: var(--green); }
+        .badge-sell { background: var(--red-dim); color: var(--red); }
+        .badge-setup { background: var(--yellow-dim); color: var(--yellow); }
+        .badge-countdown { background: var(--purple-dim); color: var(--purple); }
+        .badge-complete { background: var(--green-dim); color: var(--green); }
+
+        /* --- Progress bar --- */
+        .progress-wrap {
+            width: 100%;
+            height: 6px;
+            background: var(--border-light);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+        .progress-buy { background: var(--green); }
+        .progress-sell { background: var(--red); }
+
+        /* --- Alerts list --- */
+        .alert-list {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .alert-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-light);
+            font-size: 0.82rem;
+        }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-item:hover { background: var(--surface-hover); }
+        .alert-icon { flex-shrink: 0; font-size: 0.9rem; line-height: 1.4; }
+        .alert-msg { flex: 1; }
+        .alert-time {
+            flex-shrink: 0;
+            color: var(--text-dim);
+            font-size: 0.7rem;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+        .priority-critical .alert-msg { color: var(--red); }
+        .priority-warning .alert-msg { color: var(--yellow); }
+        .priority-info .alert-msg { color: var(--text); }
+
+        /* --- Watchlist table --- */
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.875rem;
+            font-size: 0.82rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
         }
-        th, td {
-            padding: 8px 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
+        th, td { padding: 8px 14px; text-align: left; }
         th {
             color: var(--text-muted);
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            background: var(--border-light);
+            border-bottom: 1px solid var(--border);
         }
-        tr:hover { background: rgba(88, 166, 255, 0.04); }
+        td { border-bottom: 1px solid var(--border-light); }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: var(--surface-hover); }
         .ticker-link {
             color: var(--accent);
             text-decoration: none;
             font-weight: 600;
         }
         .ticker-link:hover { text-decoration: underline; }
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
+
+        .empty {
+            color: var(--text-muted);
+            font-style: italic;
+            padding: 24px;
+            text-align: center;
         }
-        .badge-buy { background: rgba(63, 185, 80, 0.15); color: var(--green); }
-        .badge-sell { background: rgba(248, 81, 73, 0.15); color: var(--red); }
-        .badge-setup { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
-        .badge-countdown { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
-        .alert-row { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        .alert-row:last-child { border-bottom: none; }
-        .alert-time { color: var(--text-muted); font-size: 0.75rem; margin-left: 8px; }
-        .empty { color: var(--text-muted); font-style: italic; padding: 16px 0; }
-        .stats {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 24px;
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            .topbar, .main { padding-left: 16px; padding-right: 16px; }
+            .signal-grid { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
         }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px 20px;
-            min-width: 140px;
-        }
-        .stat-value { font-size: 1.5rem; font-weight: 700; }
-        .stat-label { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
-        .priority-critical { color: var(--red); }
-        .priority-warning { color: var(--yellow); }
-        .priority-info { color: var(--green); }
     </style>
 </head>
 <body>
-    <h1>DeMark Indicators Monitor</h1>
-    <p class="subtitle">Last updated: {{ now }}</p>
-
-    <div class="stats">
-        <div class="stat-card">
-            <div class="stat-value">{{ tickers|length }}</div>
-            <div class="stat-label">Tickers</div>
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>DeMark Monitor</h1>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ signals|length }}</div>
-            <div class="stat-label">Active Signals</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ alerts|length }}</div>
-            <div class="stat-label">Recent Alerts</div>
+        <div class="topbar-right">
+            <div class="refresh-indicator">
+                <span class="refresh-dot"></span>
+                <span id="updated-time">{{ now }}</span>
+            </div>
         </div>
     </div>
 
-    <div class="section">
-        <div class="section-title">Active Signals</div>
-        {% if signals %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Timeframe</th>
-                    <th>Type</th>
-                    <th>Direction</th>
-                    <th>Count</th>
-                    <th>Perfected</th>
-                    <th>TDST Level</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                </tr>
-            </thead>
-            <tbody>
+    <div class="main">
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-tickers">{{ tickers|length }}</div>
+                <div class="stat-label">Watchlist</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value green" id="stat-signals">{{ signals|length }}</div>
+                <div class="stat-label">Active Signals</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value yellow" id="stat-setups">{{ signals|selectattr('phase','equalto','setup')|list|length }}</div>
+                <div class="stat-label">Setups</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value red" id="stat-alerts">{{ alerts|length }}</div>
+                <div class="stat-label">Recent Alerts</div>
+            </div>
+        </div>
+
+        <!-- Active Signals -->
+        <div class="section">
+            <div class="section-header">
+                <div>
+                    <span class="section-title">Active Signals</span>
+                    <span class="section-count" id="signal-count">{{ signals|length }}</span>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <input type="text" id="filter-ticker" placeholder="Filter by ticker..." oninput="filterSignals()">
+                <select id="filter-phase" onchange="filterSignals()">
+                    <option value="">All phases</option>
+                    <option value="setup">Setup</option>
+                    <option value="countdown">Countdown</option>
+                </select>
+                <select id="filter-direction" onchange="filterSignals()">
+                    <option value="">All directions</option>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                </select>
+            </div>
+
+            {% if signals %}
+            <div class="signal-grid" id="signal-grid">
                 {% for s in signals %}
-                <tr>
-                    <td><a class="ticker-link" href="/ticker/{{ s.ticker }}">{{ s.ticker }}</a></td>
-                    <td>{{ s.timeframe|title }}</td>
-                    <td>
-                        <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
-                            {{ s.indicator_type|title }} {{ s.phase|title }}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge {% if s.direction == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
-                            {{ s.direction|title }}
-                        </span>
-                    </td>
-                    <td>{{ s.count_display }}</td>
-                    <td>{{ s.perfected_display }}</td>
-                    <td>{{ s.tdst_display }}</td>
-                    <td>{{ s.status }}</td>
-                    <td>{{ s.last_updated[:10] }}</td>
-                </tr>
+                <a class="signal-card" href="/ticker/{{ s.ticker }}"
+                   data-ticker="{{ s.ticker }}"
+                   data-phase="{{ s.phase }}"
+                   data-direction="{{ s.direction }}">
+                    <div class="signal-card-header">
+                        <span class="signal-ticker">{{ s.ticker }}</span>
+                        <span class="signal-timeframe">{{ s.timeframe }}</span>
+                    </div>
+                    <div class="signal-card-body">
+                        <div class="signal-row">
+                            <span class="signal-label">Direction</span>
+                            <span class="badge {% if s.direction == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
+                                {{ s.direction }}
+                            </span>
+                        </div>
+                        <div class="signal-row">
+                            <span class="signal-label">Phase</span>
+                            <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
+                                {{ s.phase }}
+                            </span>
+                        </div>
+                        <div class="signal-row">
+                            <span class="signal-label">Progress</span>
+                            <span class="signal-val">{{ s.count_display }}</span>
+                        </div>
+                        <div class="progress-wrap">
+                            <div class="progress-bar {% if s.direction == 'buy' %}progress-buy{% else %}progress-sell{% endif %}"
+                                 style="width: {{ s.progress_pct }}%"></div>
+                        </div>
+                        <div class="signal-row">
+                            <span class="signal-label">TDST</span>
+                            <span class="signal-val">{{ s.tdst_display }}</span>
+                        </div>
+                        {% if s.is_perfected %}
+                        <div class="signal-row">
+                            <span class="signal-label">Perfected</span>
+                            <span class="badge badge-complete">Yes</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </a>
                 {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">No active signals. Run a scan to populate data.</p>
-        {% endif %}
-    </div>
-
-    <div class="section">
-        <div class="section-title">Recent Alerts</div>
-        {% if alerts %}
-        {% for a in alerts %}
-        <div class="alert-row">
-            <span class="priority-{{ a.priority }}">{{ a.icon }}</span>
-            {{ a.message }}
-            <span class="alert-time">{{ a.triggered_at[:19] }}</span>
+            </div>
+            {% else %}
+            <p class="empty">No active signals. Run <code>demark scan</code> to populate data.</p>
+            {% endif %}
         </div>
-        {% endfor %}
-        {% else %}
-        <p class="empty">No alerts yet.</p>
-        {% endif %}
+
+        <!-- Alerts -->
+        <div class="section">
+            <div class="section-header">
+                <div>
+                    <span class="section-title">Recent Alerts</span>
+                    <span class="section-count">{{ alerts|length }}</span>
+                </div>
+            </div>
+            {% if alerts %}
+            <div class="alert-list">
+                {% for a in alerts %}
+                <div class="alert-item priority-{{ a.priority }}">
+                    <span class="alert-icon">{{ a.icon }}</span>
+                    <span class="alert-msg">{{ a.message }}</span>
+                    <span class="alert-time">{{ a.triggered_at[:16] }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty">No alerts yet.</p>
+            {% endif %}
+        </div>
+
+        <!-- Watchlist -->
+        <div class="section">
+            <div class="section-header">
+                <div>
+                    <span class="section-title">Watchlist</span>
+                    <span class="section-count">{{ tickers|length }}</span>
+                </div>
+            </div>
+            {% if tickers %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Tags</th>
+                        <th>Added</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tickers %}
+                    <tr>
+                        <td><a class="ticker-link" href="/ticker/{{ t.ticker }}">{{ t.ticker }}</a></td>
+                        <td>{{ t.tags|join(', ') }}</td>
+                        <td>{{ t.added_at[:10] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty">Watchlist is empty.</p>
+            {% endif %}
+        </div>
     </div>
 
-    <div class="section">
-        <div class="section-title">Watchlist</div>
-        {% if tickers %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Tags</th>
-                    <th>Added</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for t in tickers %}
-                <tr>
-                    <td><a class="ticker-link" href="/ticker/{{ t.ticker }}">{{ t.ticker }}</a></td>
-                    <td>{{ t.tags|join(', ') }}</td>
-                    <td>{{ t.added_at[:10] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">Watchlist is empty. Use <code>demark add</code> to add tickers.</p>
-        {% endif %}
-    </div>
+    <script>
+        // --- Filter signals ---
+        function filterSignals() {
+            const ticker = document.getElementById('filter-ticker').value.toUpperCase();
+            const phase = document.getElementById('filter-phase').value;
+            const direction = document.getElementById('filter-direction').value;
+            const cards = document.querySelectorAll('.signal-card');
+            let visible = 0;
+
+            cards.forEach(card => {
+                const matchTicker = !ticker || card.dataset.ticker.includes(ticker);
+                const matchPhase = !phase || card.dataset.phase === phase;
+                const matchDir = !direction || card.dataset.direction === direction;
+                const show = matchTicker && matchPhase && matchDir;
+                card.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+
+            document.getElementById('signal-count').textContent = visible;
+        }
+
+        // --- Auto-refresh every 60s ---
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/signals');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('updated-time').textContent = data.updated;
+                    document.getElementById('stat-tickers').textContent = data.tickers_count;
+                    document.getElementById('stat-signals').textContent = data.signals.length;
+                    document.getElementById('stat-alerts').textContent = data.alerts.length;
+                    document.getElementById('stat-setups').textContent =
+                        data.signals.filter(s => s.phase === 'setup').length;
+                }
+            } catch (e) { /* silent retry next cycle */ }
+        }, 60000);
+    </script>
 </body>
 </html>
