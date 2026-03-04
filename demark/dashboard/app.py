@@ -114,9 +114,11 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
 
     @app.route("/")
     def index():
-        signals = _enrich_signals(get_all_signal_states(db_path=db_path))
-        alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
         tickers = list_tickers(db_path=db_path)
+        active_tickers = {t["ticker"] for t in tickers}
+        signals = _enrich_signals(get_all_signal_states(db_path=db_path))
+        signals = [s for s in signals if s["ticker"] in active_tickers]
+        alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
 
         # Group signals by ticker
         grouped: dict[str, list[dict]] = {}
@@ -135,9 +137,11 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
     @app.route("/api/signals")
     def api_signals():
         """JSON endpoint for auto-refresh."""
-        signals = _enrich_signals(get_all_signal_states(db_path=db_path))
-        alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
         tickers = list_tickers(db_path=db_path)
+        active_tickers = {t["ticker"] for t in tickers}
+        signals = _enrich_signals(get_all_signal_states(db_path=db_path))
+        signals = [s for s in signals if s["ticker"] in active_tickers]
+        alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
         return jsonify(
             signals=signals,
             alerts=alerts,
