@@ -14,7 +14,7 @@ Track TD Sequential, TD Combo, and composite DeMark patterns across a managed wa
 ## Quick Start
 
 ```bash
-# Install
+# Install (required — registers the `demark` command)
 pip install -e ".[dev]"
 
 # Add tickers to your watchlist
@@ -29,6 +29,9 @@ demark dashboard
 # Run tests
 pytest
 ```
+
+> **Note:** You must run `pip install -e .` first. Without it, the `demark`
+> command won't be available and you'd have to use `python -m demark.cli` instead.
 
 ## CLI Commands
 
