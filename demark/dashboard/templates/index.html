@@ -143,22 +143,17 @@
             margin-left: 8px;
         }
 
-        /* --- Signal cards grid --- */
-        .signal-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 12px;
-        }
+        /* --- Signal cards: one card per ticker --- */
+        .signal-list { display: flex; flex-direction: column; gap: 12px; }
         .signal-card {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 16px;
             transition: border-color 0.15s, background 0.15s;
-            cursor: pointer;
             text-decoration: none;
             color: inherit;
             display: block;
+            overflow: hidden;
         }
         .signal-card:hover {
             border-color: var(--accent);
@@ -167,36 +162,60 @@
         .signal-card-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-light);
         }
         .signal-ticker {
             font-size: 1.05rem;
             font-weight: 700;
             color: var(--accent);
+            margin-right: auto;
         }
-        .signal-timeframe {
+        .signal-tf-count {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        /* Sub-rows: one per timeframe */
+        .signal-tf-row {
+            display: grid;
+            grid-template-columns: 80px 80px 70px 1fr 90px 60px;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border-light);
+            font-size: 0.82rem;
+        }
+        .signal-tf-row:last-child { border-bottom: none; }
+        .signal-tf-label {
             font-size: 0.7rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            background: var(--border-light);
-            padding: 2px 8px;
-            border-radius: 4px;
+            font-weight: 600;
         }
-        .signal-card-body { display: flex; flex-direction: column; gap: 8px; }
-        .signal-row {
+        .signal-progress-cell {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 8px;
         }
-        .signal-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
+        .signal-progress-cell .progress-wrap {
+            flex: 1;
+            min-width: 60px;
         }
-        .signal-val { font-size: 0.85rem; font-weight: 600; }
+        .signal-progress-text {
+            font-size: 0.78rem;
+            font-weight: 600;
+            white-space: nowrap;
+            min-width: 36px;
+        }
+        .signal-val { font-size: 0.82rem; font-weight: 600; }
+        /* Responsive: stack on small screens */
+        @media (max-width: 900px) {
+            .signal-tf-row {
+                grid-template-columns: 1fr 1fr;
+                gap: 4px 10px;
+            }
+        }
 
         /* --- Badges --- */
         .badge {
@@ -404,7 +423,6 @@
         /* --- Responsive --- */
         @media (max-width: 768px) {
             .topbar, .main { padding-left: 16px; padding-right: 16px; }
-            .signal-grid { grid-template-columns: 1fr; }
             .stats { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
@@ -448,7 +466,7 @@
             <div class="section-header">
                 <div>
                     <span class="section-title">Active Signals</span>
-                    <span class="section-count" id="signal-count">{{ signals|length }}</span>
+                    <span class="section-count" id="signal-count">{{ grouped_signals|length }}</span>
                 </div>
             </div>
 
@@ -466,49 +484,41 @@
                 </select>
             </div>
 
-            {% if signals %}
-            <div class="signal-grid" id="signal-grid">
-                {% for s in signals %}
-                <a class="signal-card" href="/ticker/{{ s.ticker }}"
-                   data-ticker="{{ s.ticker }}"
-                   data-phase="{{ s.phase }}"
-                   data-direction="{{ s.direction }}">
+            {% if grouped_signals %}
+            <div class="signal-list" id="signal-list">
+                {% for ticker, sigs in grouped_signals.items() %}
+                <a class="signal-card" href="/ticker/{{ ticker }}"
+                   data-ticker="{{ ticker }}"
+                   data-phases="{{ sigs|map(attribute='phase')|join(',') }}"
+                   data-directions="{{ sigs|map(attribute='direction')|join(',') }}">
                     <div class="signal-card-header">
-                        <span class="signal-ticker">{{ s.ticker }}</span>
-                        <span class="signal-timeframe">{{ s.timeframe }}</span>
+                        <span class="signal-ticker">{{ ticker }}</span>
+                        <span class="signal-tf-count">{{ sigs|length }} timeframe{{ 's' if sigs|length > 1 }}</span>
                     </div>
-                    <div class="signal-card-body">
-                        <div class="signal-row">
-                            <span class="signal-label">Direction</span>
-                            <span class="badge {% if s.direction == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
-                                {{ s.direction }}
-                            </span>
+                    {% for s in sigs %}
+                    <div class="signal-tf-row">
+                        <span class="signal-tf-label">{{ s.timeframe }}</span>
+                        <span class="badge {% if s.direction == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
+                            {{ s.direction }}
+                        </span>
+                        <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
+                            {{ s.phase }}
+                        </span>
+                        <div class="signal-progress-cell">
+                            <div class="progress-wrap">
+                                <div class="progress-bar {% if s.direction == 'buy' %}progress-buy{% else %}progress-sell{% endif %}"
+                                     style="width: {{ s.progress_pct }}%"></div>
+                            </div>
+                            <span class="signal-progress-text">{{ s.count_display }}</span>
                         </div>
-                        <div class="signal-row">
-                            <span class="signal-label">Phase</span>
-                            <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
-                                {{ s.phase }}
-                            </span>
-                        </div>
-                        <div class="signal-row">
-                            <span class="signal-label">Progress</span>
-                            <span class="signal-val">{{ s.count_display }}</span>
-                        </div>
-                        <div class="progress-wrap">
-                            <div class="progress-bar {% if s.direction == 'buy' %}progress-buy{% else %}progress-sell{% endif %}"
-                                 style="width: {{ s.progress_pct }}%"></div>
-                        </div>
-                        <div class="signal-row">
-                            <span class="signal-label">TDST</span>
-                            <span class="signal-val">{{ s.tdst_display }}</span>
-                        </div>
+                        <span class="signal-val">{{ s.tdst_display }}</span>
                         {% if s.is_perfected %}
-                        <div class="signal-row">
-                            <span class="signal-label">Perfected</span>
-                            <span class="badge badge-complete">Yes</span>
-                        </div>
+                        <span class="badge badge-complete">Perf</span>
+                        {% else %}
+                        <span></span>
                         {% endif %}
                     </div>
+                    {% endfor %}
                 </a>
                 {% endfor %}
             </div>
@@ -693,8 +703,10 @@
 
             cards.forEach(card => {
                 const matchTicker = !ticker || card.dataset.ticker.includes(ticker);
-                const matchPhase = !phase || card.dataset.phase === phase;
-                const matchDir = !direction || card.dataset.direction === direction;
+                const phases = (card.dataset.phases || '').split(',');
+                const dirs = (card.dataset.directions || '').split(',');
+                const matchPhase = !phase || phases.includes(phase);
+                const matchDir = !direction || dirs.includes(direction);
                 const show = matchTicker && matchPhase && matchDir;
                 card.style.display = show ? '' : 'none';
                 if (show) visible++;

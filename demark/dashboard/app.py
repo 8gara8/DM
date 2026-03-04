@@ -118,9 +118,15 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
         alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
         tickers = list_tickers(db_path=db_path)
 
+        # Group signals by ticker
+        grouped: dict[str, list[dict]] = {}
+        for s in signals:
+            grouped.setdefault(s["ticker"], []).append(s)
+
         return render_template(
             "index.html",
             signals=signals,
+            grouped_signals=grouped,
             alerts=alerts,
             tickers=tickers,
             now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
