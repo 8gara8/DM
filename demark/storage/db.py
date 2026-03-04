@@ -85,6 +85,7 @@ def init_db(db_path: str | None = None) -> None:
                 alert_type TEXT NOT NULL,
                 priority TEXT NOT NULL,
                 message TEXT NOT NULL,
+                dedupe_key TEXT UNIQUE,
                 triggered_at TEXT NOT NULL,
                 acknowledged INTEGER DEFAULT 0
             );
@@ -260,16 +261,21 @@ def save_alert(
     alert_type: str,
     priority: str,
     message: str,
+    dedupe_key: str | None = None,
     db_path: str | None = None,
-) -> int:
-    """Save an alert and return its ID."""
+) -> int | None:
+    """Save an alert and return its ID. Returns None if dedupe_key already exists."""
     with get_connection(db_path) as conn:
-        cursor = conn.execute(
-            """INSERT INTO alerts (ticker, timeframe, alert_type, priority, message, triggered_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (ticker.upper(), timeframe, alert_type, priority, message, datetime.utcnow().isoformat()),
-        )
-        return cursor.lastrowid
+        try:
+            cursor = conn.execute(
+                """INSERT INTO alerts (ticker, timeframe, alert_type, priority, message, dedupe_key, triggered_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (ticker.upper(), timeframe, alert_type, priority, message,
+                 dedupe_key, datetime.utcnow().isoformat()),
+            )
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None
 
 
 def get_recent_alerts(limit: int = 50, db_path: str | None = None) -> list[dict]:

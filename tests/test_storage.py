@@ -181,6 +181,30 @@ class TestAlerts:
         alerts = get_recent_alerts(limit=5, db_path=db_path)
         assert len(alerts) == 5
 
+    def test_alert_deduplication(self, db_path):
+        """Same dedupe_key should not create duplicate alerts."""
+        id1 = save_alert(
+            "AAPL", "daily", "setup_complete", "warning", "msg1",
+            dedupe_key="AAPL:daily:setup_complete-2024-01-15", db_path=db_path,
+        )
+        id2 = save_alert(
+            "AAPL", "daily", "setup_complete", "warning", "msg1",
+            dedupe_key="AAPL:daily:setup_complete-2024-01-15", db_path=db_path,
+        )
+        assert id1 is not None
+        assert id2 is None  # duplicate suppressed
+        alerts = get_recent_alerts(db_path=db_path)
+        assert len(alerts) == 1
+
+    def test_alert_different_dedupe_keys(self, db_path):
+        """Different dedupe_keys should create separate alerts."""
+        save_alert("AAPL", "daily", "setup_complete", "warning", "msg1",
+                   dedupe_key="AAPL:daily:setup-2024-01-15", db_path=db_path)
+        save_alert("AAPL", "daily", "setup_complete", "warning", "msg2",
+                   dedupe_key="AAPL:daily:setup-2024-01-16", db_path=db_path)
+        alerts = get_recent_alerts(db_path=db_path)
+        assert len(alerts) == 2
+
 
 class TestPriceCache:
     def test_cache_and_retrieve(self, db_path):

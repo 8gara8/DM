@@ -24,6 +24,7 @@ class Alert:
     alert_type: str
     priority: str  # "critical", "warning", "info"
     message: str
+    dedupe_key: str = ""
 
 
 def generate_alerts(
@@ -57,6 +58,7 @@ def generate_alerts(
 
     alerts: list[Alert] = []
     last = annotations[-1]
+    date_str = str(last.date)[:10]
 
     # --- Setup completion alerts ---
     for setup in completed_setups:
@@ -75,6 +77,7 @@ def generate_alerts(
                     f"{ticker} {timeframe.title()}: {direction} Setup 9 completed "
                     f"(perfected: {perfected}). TDST {level_type} at {tdst_str}"
                 ),
+                dedupe_key=f"{ticker}:{timeframe}:setup_complete-{date_str}",
             ))
 
     # --- Countdown completion alerts ---
@@ -92,6 +95,7 @@ def generate_alerts(
                     f"{ticker} {timeframe.title()}: {direction} Countdown 13 completed "
                     f"(qualified: {qualified})"
                 ),
+                dedupe_key=f"{ticker}:{timeframe}:countdown_complete-{date_str}",
             ))
 
     # --- Approaching setup completion ---
@@ -113,6 +117,7 @@ def generate_alerts(
                 f"{last.setup_count} of 9 — {remaining} more qualifying {bar_word} "
                 f"to complete"
             ),
+            dedupe_key=f"{ticker}:{timeframe}:approaching_setup-{date_str}",
         ))
 
     # --- Approaching countdown completion ---
@@ -134,6 +139,7 @@ def generate_alerts(
                 f"{last.countdown_count} of 13 — {remaining} more qualifying {bar_word} "
                 f"to complete"
             ),
+            dedupe_key=f"{ticker}:{timeframe}:approaching_countdown-{date_str}",
         ))
 
     return alerts
