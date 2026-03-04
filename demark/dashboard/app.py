@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 from demark.storage.db import (
+    add_ticker,
     get_all_signal_states,
     get_recent_alerts,
     init_db,
     list_tickers,
+    remove_ticker,
 )
 
 
@@ -90,6 +92,33 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
             tickers_count=len(tickers),
             updated=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
         )
+
+    @app.route("/api/tickers")
+    def api_tickers():
+        """Return the current watchlist as JSON."""
+        tickers = list_tickers(db_path=db_path)
+        return jsonify(tickers=tickers)
+
+    @app.route("/api/tickers", methods=["POST"])
+    def api_add_ticker():
+        """Add a ticker to the watchlist."""
+        data = request.get_json(silent=True) or {}
+        ticker = (data.get("ticker") or "").strip().upper()
+        if not ticker:
+            return jsonify(error="Ticker is required"), 400
+        if not ticker.isalpha() or len(ticker) > 10:
+            return jsonify(error="Invalid ticker symbol"), 400
+        tags = data.get("tags") or []
+        is_new = add_ticker(ticker, tags, db_path=db_path)
+        return jsonify(ticker=ticker, is_new=is_new, tags=tags), 201 if is_new else 200
+
+    @app.route("/api/tickers/<symbol>", methods=["DELETE"])
+    def api_remove_ticker(symbol: str):
+        """Remove a ticker from the watchlist."""
+        removed = remove_ticker(symbol, db_path=db_path)
+        if not removed:
+            return jsonify(error="Ticker not found or already removed"), 404
+        return jsonify(ticker=symbol.upper(), removed=True)
 
     @app.route("/ticker/<symbol>")
     def ticker_detail(symbol: str):
