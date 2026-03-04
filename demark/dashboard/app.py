@@ -6,10 +6,13 @@ and watchlist status with auto-refresh.
 
 from __future__ import annotations
 
+import logging
+import threading
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
+from demark.config import load_config
 from demark.storage.db import (
     add_ticker,
     get_all_signal_states,
@@ -18,6 +21,8 @@ from demark.storage.db import (
     list_tickers,
     remove_ticker,
 )
+
+logger = logging.getLogger("demark")
 
 
 def _enrich_signals(signals: list[dict]) -> list[dict]:
@@ -59,10 +64,51 @@ def _enrich_alerts(alerts: list[dict]) -> list[dict]:
     return alerts
 
 
+# Track background scan status per ticker
+_scan_status: dict[str, str] = {}  # ticker -> "scanning" | "done" | "error:msg"
+_scan_lock = threading.Lock()
+
+
+def _run_scan_background(
+    tickers: list[str],
+    timeframes: list[str],
+    db_path: str,
+    setup_threshold: int,
+    countdown_threshold: int,
+) -> None:
+    """Run scan in a background thread."""
+    from demark.engine.scan import scan_ticker_timeframe
+
+    for sym in tickers:
+        with _scan_lock:
+            _scan_status[sym] = "scanning"
+        try:
+            for tf in timeframes:
+                scan_ticker_timeframe(
+                    ticker=sym,
+                    timeframe=tf,
+                    db_path=db_path,
+                    setup_threshold=setup_threshold,
+                    countdown_threshold=countdown_threshold,
+                )
+            with _scan_lock:
+                _scan_status[sym] = "done"
+        except Exception as e:
+            logger.exception("Scan error for %s: %s", sym, e)
+            with _scan_lock:
+                _scan_status[sym] = f"error:{e}"
+
+
 def create_app(db_path: str = "./demark_monitor.db") -> Flask:
     """Create and configure the Flask application."""
     app = Flask(__name__)
     app.config["DB_PATH"] = db_path
+
+    config = load_config()
+    timeframes = config.get("timeframes", ["daily"])
+    alert_config = config.get("alerts", {})
+    setup_threshold = alert_config.get("approaching_setup_threshold", 7)
+    countdown_threshold = alert_config.get("approaching_countdown_threshold", 11)
 
     init_db(db_path)
 
@@ -101,7 +147,7 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
 
     @app.route("/api/tickers", methods=["POST"])
     def api_add_ticker():
-        """Add a ticker to the watchlist."""
+        """Add a ticker to the watchlist and trigger a background scan."""
         data = request.get_json(silent=True) or {}
         ticker = (data.get("ticker") or "").strip().upper()
         if not ticker:
@@ -110,7 +156,16 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
             return jsonify(error="Invalid ticker symbol"), 400
         tags = data.get("tags") or []
         is_new = add_ticker(ticker, tags, db_path=db_path)
-        return jsonify(ticker=ticker, is_new=is_new, tags=tags), 201 if is_new else 200
+
+        # Kick off a background scan for the new ticker
+        thread = threading.Thread(
+            target=_run_scan_background,
+            args=([ticker], timeframes, db_path, setup_threshold, countdown_threshold),
+            daemon=True,
+        )
+        thread.start()
+
+        return jsonify(ticker=ticker, is_new=is_new, tags=tags, scanning=True), 201 if is_new else 200
 
     @app.route("/api/tickers/<symbol>", methods=["DELETE"])
     def api_remove_ticker(symbol: str):
@@ -119,6 +174,42 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
         if not removed:
             return jsonify(error="Ticker not found or already removed"), 404
         return jsonify(ticker=symbol.upper(), removed=True)
+
+    @app.route("/api/scan", methods=["POST"])
+    def api_scan():
+        """Trigger a scan for specific tickers or all watchlist tickers."""
+        data = request.get_json(silent=True) or {}
+        ticker = (data.get("ticker") or "").strip().upper()
+
+        if ticker:
+            tickers_to_scan = [ticker]
+        else:
+            watched = list_tickers(db_path=db_path)
+            if not watched:
+                return jsonify(error="No tickers in watchlist"), 400
+            tickers_to_scan = [t["ticker"] for t in watched]
+
+        # Check if any of these are already scanning
+        with _scan_lock:
+            already = [t for t in tickers_to_scan if _scan_status.get(t) == "scanning"]
+        if already:
+            return jsonify(error=f"Already scanning: {', '.join(already)}"), 409
+
+        thread = threading.Thread(
+            target=_run_scan_background,
+            args=(tickers_to_scan, timeframes, db_path, setup_threshold, countdown_threshold),
+            daemon=True,
+        )
+        thread.start()
+
+        return jsonify(scanning=tickers_to_scan, count=len(tickers_to_scan))
+
+    @app.route("/api/scan/status")
+    def api_scan_status():
+        """Check scan status for all tickers."""
+        with _scan_lock:
+            status = dict(_scan_status)
+        return jsonify(status=status)
 
     @app.route("/ticker/<symbol>")
     def ticker_detail(symbol: str):

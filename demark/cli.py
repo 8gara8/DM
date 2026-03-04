@@ -137,78 +137,15 @@ def _scan_ticker_timeframe(
     countdown_threshold: int,
 ) -> list:
     """Scan a single ticker on a single timeframe. Returns alerts."""
-    from demark.alerts.alerts import generate_alerts
-    from demark.data.provider import get_bars
-    from demark.engine.sequential import calculate_sequential
+    from demark.engine.scan import scan_ticker_timeframe
 
-    bars = get_bars(sym, timeframe=timeframe)
-    if bars.empty:
-        return []
-
-    annotations, setups, countdowns, state = calculate_sequential(bars)
-
-    # Save signal state
-    last = annotations[-1] if annotations else None
-    if last:
-        direction = None
-        phase = "none"
-        count = 0
-        tdst = None
-        perfected = False
-        cd_bar8 = None
-
-        if last.countdown_count > 0 and last.countdown_direction:
-            direction = last.countdown_direction.value
-            phase = "countdown"
-            count = last.countdown_count
-            tdst = last.tdst_level
-            cd_bar8 = state.countdown_bar8_close
-        elif last.setup_count > 0 and last.setup_direction:
-            direction = last.setup_direction.value
-            phase = "setup"
-            count = last.setup_count
-            tdst = last.tdst_level
-            perfected = last.setup_perfected
-
-        save_signal_state(
-            ticker=sym,
-            timeframe=timeframe,
-            indicator_type="sequential",
-            direction=direction,
-            phase=phase,
-            current_count=count,
-            tdst_level=tdst,
-            is_perfected=perfected,
-            countdown_bar_8_close=cd_bar8,
-            db_path=db_path,
-        )
-
-    # Generate and save alerts (with dedup)
-    alerts = generate_alerts(
+    return scan_ticker_timeframe(
         ticker=sym,
         timeframe=timeframe,
-        annotations=annotations,
-        completed_setups=setups,
-        completed_countdowns=countdowns,
+        db_path=db_path,
         setup_threshold=setup_threshold,
         countdown_threshold=countdown_threshold,
     )
-
-    new_alerts = []
-    for a in alerts:
-        alert_id = save_alert(
-            ticker=a.ticker,
-            timeframe=a.timeframe,
-            alert_type=a.alert_type,
-            priority=a.priority,
-            message=a.message,
-            dedupe_key=a.dedupe_key or None,
-            db_path=db_path,
-        )
-        if alert_id is not None:
-            new_alerts.append(a)
-
-    return new_alerts
 
 
 @cli.command()

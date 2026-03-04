@@ -342,6 +342,43 @@
             border-color: var(--red);
             background: var(--red-dim);
         }
+        .btn-scan {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            font-size: 0.72rem;
+        }
+        .btn-scan:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+        .btn-scan.scanning {
+            color: var(--yellow);
+            border-color: var(--yellow);
+            cursor: wait;
+            pointer-events: none;
+        }
+        .btn-scan-all {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+        .btn-scan-all:hover {
+            background: var(--accent-dim);
+        }
+        .btn-scan-all.scanning {
+            color: var(--yellow);
+            border-color: var(--yellow);
+            cursor: wait;
+            pointer-events: none;
+        }
+        .scan-status {
+            font-size: 0.7rem;
+            color: var(--yellow);
+            margin-left: 8px;
+        }
         .toast {
             position: fixed;
             bottom: 24px;
@@ -510,6 +547,7 @@
                     <span class="section-title">Watchlist</span>
                     <span class="section-count" id="watchlist-count">{{ tickers|length }}</span>
                 </div>
+                <button class="btn btn-scan-all" id="scan-all-btn" onclick="scanAll()">Scan All</button>
             </div>
 
             <form class="add-form" id="add-ticker-form" onsubmit="return addTicker(event)">
@@ -525,7 +563,7 @@
                         <th>Ticker</th>
                         <th>Tags</th>
                         <th>Added</th>
-                        <th style="width: 80px;"></th>
+                        <th style="width: 160px;"></th>
                     </tr>
                 </thead>
                 <tbody id="watchlist-body">
@@ -534,7 +572,10 @@
                         <td><a class="ticker-link" href="/ticker/{{ t.ticker }}">{{ t.ticker }}</a></td>
                         <td>{{ t.tags|join(', ') }}</td>
                         <td>{{ t.added_at[:10] }}</td>
-                        <td><button class="btn btn-danger" onclick="removeTicker('{{ t.ticker }}')">Remove</button></td>
+                        <td>
+                            <button class="btn btn-scan" id="scan-{{ t.ticker }}" onclick="scanTicker('{{ t.ticker }}')">Scan</button>
+                            <button class="btn btn-danger" onclick="removeTicker('{{ t.ticker }}')">Remove</button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -594,10 +635,15 @@
                         '<td><a class="ticker-link" href="/ticker/' + ticker + '">' + ticker + '</a></td>' +
                         '<td>' + tags.join(', ') + '</td>' +
                         '<td>' + today + '</td>' +
-                        '<td><button class="btn btn-danger" onclick="removeTicker(\'' + ticker + '\')">Remove</button></td>';
+                        '<td>' +
+                            '<button class="btn btn-scan scanning" id="scan-' + ticker + '">Scanning...</button> ' +
+                            '<button class="btn btn-danger" onclick="removeTicker(\'' + ticker + '\')">Remove</button>' +
+                        '</td>';
                     tbody.appendChild(tr);
-                    showToast(ticker + ' added to watchlist', 'success');
+                    showToast(ticker + ' added — scanning data...', 'success');
                     updateWatchlistCount(1);
+                    // Poll for scan completion then refresh
+                    pollScanDone([ticker]);
                 }
 
                 form.reset();
@@ -655,6 +701,115 @@
             });
 
             document.getElementById('signal-count').textContent = visible;
+        }
+
+        // --- Scan a single ticker ---
+        async function scanTicker(ticker) {
+            const btn = document.getElementById('scan-' + ticker);
+            if (btn) {
+                btn.textContent = 'Scanning...';
+                btn.classList.add('scanning');
+            }
+            try {
+                const res = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.error || 'Scan failed', 'error');
+                    if (btn) { btn.textContent = 'Scan'; btn.classList.remove('scanning'); }
+                    return;
+                }
+                showToast(ticker + ' scan started...', 'success');
+                pollScanDone([ticker]);
+            } catch (err) {
+                showToast('Network error', 'error');
+                if (btn) { btn.textContent = 'Scan'; btn.classList.remove('scanning'); }
+            }
+        }
+
+        // --- Scan all tickers ---
+        async function scanAll() {
+            const btn = document.getElementById('scan-all-btn');
+            btn.textContent = 'Scanning...';
+            btn.classList.add('scanning');
+            try {
+                const res = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.error || 'Scan failed', 'error');
+                    btn.textContent = 'Scan All';
+                    btn.classList.remove('scanning');
+                    return;
+                }
+                // Mark all individual scan buttons as scanning
+                (data.scanning || []).forEach(t => {
+                    const sb = document.getElementById('scan-' + t);
+                    if (sb) { sb.textContent = 'Scanning...'; sb.classList.add('scanning'); }
+                });
+                showToast('Scanning ' + data.count + ' tickers...', 'success');
+                pollScanDone(data.scanning || []);
+            } catch (err) {
+                showToast('Network error', 'error');
+                btn.textContent = 'Scan All';
+                btn.classList.remove('scanning');
+            }
+        }
+
+        // --- Poll scan status until all tickers are done, then refresh page ---
+        function pollScanDone(tickers) {
+            const check = async () => {
+                try {
+                    const res = await fetch('/api/scan/status');
+                    const data = await res.json();
+                    const allDone = tickers.every(t => {
+                        const st = data.status[t];
+                        return st && st !== 'scanning';
+                    });
+
+                    // Update individual buttons for tickers that finished
+                    tickers.forEach(t => {
+                        const st = data.status[t];
+                        const btn = document.getElementById('scan-' + t);
+                        if (btn && st && st !== 'scanning') {
+                            btn.classList.remove('scanning');
+                            if (st === 'done') {
+                                btn.textContent = 'Scan';
+                            } else {
+                                btn.textContent = 'Error';
+                            }
+                        }
+                    });
+
+                    if (allDone) {
+                        // Reset scan-all button
+                        const scanAllBtn = document.getElementById('scan-all-btn');
+                        scanAllBtn.textContent = 'Scan All';
+                        scanAllBtn.classList.remove('scanning');
+
+                        // Check for errors
+                        const errors = tickers.filter(t => (data.status[t] || '').startsWith('error:'));
+                        if (errors.length) {
+                            showToast(errors.length + ' ticker(s) had scan errors', 'error');
+                        } else {
+                            showToast('Scan complete — refreshing...', 'success');
+                        }
+                        // Reload after a brief delay so toast is visible
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        setTimeout(check, 2000);
+                    }
+                } catch (e) {
+                    setTimeout(check, 3000);
+                }
+            };
+            setTimeout(check, 2000);
         }
 
         // --- Auto-refresh every 60s ---
