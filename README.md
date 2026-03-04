@@ -30,8 +30,13 @@ demark dashboard
 pytest
 ```
 
-> **Note:** You must run `pip install -e .` first. Without it, the `demark`
-> command won't be available and you'd have to use `python -m demark.cli` instead.
+> **Note:** If the `demark` command isn't found after install (common on Windows
+> where the Scripts folder isn't on PATH), use `python -m demark` instead:
+> ```bash
+> python -m demark dashboard
+> python -m demark scan
+> python -m demark add AAPL
+> ```
 
 ## CLI Commands
 
