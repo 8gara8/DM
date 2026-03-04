@@ -120,10 +120,13 @@ def create_app(db_path: str = "./demark_monitor.db") -> Flask:
         signals = [s for s in signals if s["ticker"] in active_tickers]
         alerts = _enrich_alerts(get_recent_alerts(limit=50, db_path=db_path))
 
-        # Group signals by ticker
+        # Group signals by ticker, sorted by timeframe order
+        tf_order = {"daily": 0, "weekly": 1, "monthly": 2, "yearly": 3}
         grouped: dict[str, list[dict]] = {}
         for s in signals:
             grouped.setdefault(s["ticker"], []).append(s)
+        for sigs in grouped.values():
+            sigs.sort(key=lambda s: tf_order.get(s["timeframe"], 99))
 
         return render_template(
             "index.html",
