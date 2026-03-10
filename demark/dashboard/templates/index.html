@@ -178,7 +178,7 @@
         /* Sub-rows: one per timeframe */
         .signal-tf-row {
             display: grid;
-            grid-template-columns: 80px 80px 70px 1fr 90px 60px;
+            grid-template-columns: 80px 80px 100px minmax(60px, 300px) 60px 90px 60px;
             align-items: center;
             gap: 10px;
             padding: 8px 16px;
@@ -420,6 +420,36 @@
         .toast.error { border-color: var(--red); color: var(--red); }
         .toast.success { border-color: var(--green); color: var(--green); }
 
+        /* --- Glossary --- */
+        .glossary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px 24px;
+        }
+        .glossary h3 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .glossary dl {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 8px 16px;
+            font-size: 0.82rem;
+        }
+        .glossary dt {
+            font-weight: 700;
+            color: var(--text);
+        }
+        .glossary dd {
+            color: var(--text-muted);
+            margin: 0;
+        }
+
         /* --- Responsive --- */
         @media (max-width: 768px) {
             .topbar, .main { padding-left: 16px; padding-right: 16px; }
@@ -504,13 +534,11 @@
                         <span class="badge {% if s.phase == 'setup' %}badge-setup{% else %}badge-countdown{% endif %}">
                             {{ s.phase }}
                         </span>
-                        <div class="signal-progress-cell">
-                            <div class="progress-wrap">
-                                <div class="progress-bar {% if s.direction == 'buy' %}progress-buy{% else %}progress-sell{% endif %}"
-                                     style="width: {{ s.progress_pct }}%"></div>
-                            </div>
-                            <span class="signal-progress-text">{{ s.count_display }}</span>
+                        <div class="progress-wrap">
+                            <div class="progress-bar {% if s.direction == 'buy' %}progress-buy{% else %}progress-sell{% endif %}"
+                                 style="width: {{ s.progress_pct }}%"></div>
                         </div>
+                        <span class="signal-progress-text">{{ s.count_display }}</span>
                         <span class="signal-val">{{ s.tdst_display }}</span>
                         {% if s.is_perfected %}
                         <span class="badge badge-complete">Perf</span>
@@ -593,6 +621,31 @@
             {% if not tickers %}
             <p class="empty" id="watchlist-empty">Watchlist is empty.</p>
             {% endif %}
+        </div>
+        <!-- Glossary -->
+        <div class="section">
+            <div class="glossary">
+                <h3>DeMark Indicator Glossary</h3>
+                <dl>
+                    <dt>Setup</dt>
+                    <dd>A sequence of 9 consecutive bars where each bar's close is compared to the close 4 bars earlier. A completed 9-count Setup indicates a potential trend exhaustion and reversal zone.</dd>
+
+                    <dt>Countdown</dt>
+                    <dd>Follows a completed Setup. A sequence of 13 bars (not necessarily consecutive) where each qualifying bar's close is compared to the high/low 2 bars earlier. A completed 13-count Countdown marks a higher-probability reversal signal.</dd>
+
+                    <dt>Buy</dt>
+                    <dd>A bullish signal. Buy Setups and Countdowns form during downtrends and suggest a potential upward reversal.</dd>
+
+                    <dt>Sell</dt>
+                    <dd>A bearish signal. Sell Setups and Countdowns form during uptrends and suggest a potential downward reversal.</dd>
+
+                    <dt>Perfected</dt>
+                    <dd>A Setup or Countdown where a specific bar's low (for Buy) or high (for Sell) meets additional conditions, strengthening the reversal signal.</dd>
+
+                    <dt>TDST</dt>
+                    <dd>TD Setup Trend (TDST) level. A support/resistance line established by the true high or true low of bar 1 of a Setup. Prices breaking TDST indicate the trend may continue rather than reverse.</dd>
+                </dl>
+            </div>
         </div>
     </div>
 
