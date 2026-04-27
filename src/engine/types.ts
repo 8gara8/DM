@@ -99,8 +99,14 @@ export interface DirectionalSnapshot {
   setupCompleted: boolean;
   setupPerfected: boolean;
   setupPerfectionPending: boolean;
-  /** Bar indices of every counted setup bar — for late-perfection lookahead. */
+  /** Bar indices of the in-progress setup count (cleared on lookback failure). */
   setupBarIndices: number[];
+  /**
+   * Frozen at Setup completion. Survives in-progress count resets so the
+   * late-perfection lookahead and the active Countdown's anchors don't
+   * get nuked by a single bar that breaks the lookback rule.
+   */
+  completedSetupBarIndices: number[];
 
   // Countdown
   countdownActive: boolean;

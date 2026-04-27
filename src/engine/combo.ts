@@ -329,6 +329,7 @@ export class ComboTracker {
       setupPerfected: false,
       setupPerfectionPending: false,
       setupBarIndices: [],
+      completedSetupBarIndices: [],
       countdownActive: this.countdownActive,
       countdownCount: this.countdownCount,
       countdownBarIndices: [...this.countdownBarIndices],

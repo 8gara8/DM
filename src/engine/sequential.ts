@@ -37,6 +37,7 @@ export class SequentialTracker {
   setupCount = 0;
   setupBar1Index: number | null = null;
   setupBar1Date: string | null = null;
+  /** Bar 9 of the most recent COMPLETED Setup. Persists past in-progress resets. */
   setupBar9Index: number | null = null;
   setupBar9Date: string | null = null;
   setupCompleted = false;
@@ -44,6 +45,12 @@ export class SequentialTracker {
   setupPerfectionPending = false;
   /** Bar indices for every counted setup bar (length 9 once complete). */
   setupBarIndices: number[] = [];
+  /**
+   * Frozen copy of `setupBarIndices` captured when the Setup completed.
+   * Used by the late-perfection lookahead and by recycle range math —
+   * survives resets of the in-progress Setup count.
+   */
+  completedSetupBarIndices: number[] = [];
   /** Pre-completion bar 1 of an in-progress recycling-eligible new setup. */
   newSetupBar1Index: number | null = null;
   newSetupBar9Index: number | null = null;
@@ -89,6 +96,7 @@ export class SequentialTracker {
       setupPerfected: this.setupPerfected,
       setupPerfectionPending: this.setupPerfectionPending,
       setupBarIndices: [...this.setupBarIndices],
+      completedSetupBarIndices: [...this.completedSetupBarIndices],
       countdownActive: this.countdownActive,
       countdownCount: this.countdownCount,
       countdownBarIndices: [...this.countdownBarIndices],
@@ -120,6 +128,7 @@ export class SequentialTracker {
     t.setupPerfected = snap.setupPerfected;
     t.setupPerfectionPending = snap.setupPerfectionPending;
     t.setupBarIndices = [...snap.setupBarIndices];
+    t.completedSetupBarIndices = [...(snap.completedSetupBarIndices ?? [])];
     t.countdownActive = snap.countdownActive;
     t.countdownCount = snap.countdownCount;
     t.countdownBarIndices = [...snap.countdownBarIndices];
@@ -140,17 +149,30 @@ export class SequentialTracker {
     return t;
   }
 
+  /**
+   * Reset only the in-progress Setup count. Do NOT clear the
+   * completed-Setup anchor (`setupBar9Index`, `setupCompleted`,
+   * `completedSetupBarIndices`, etc.) — an active Countdown depends on
+   * those staying intact across bars where the in-progress count breaks.
+   *
+   * Use `clearCompletedSetup()` only when a NEW Setup completes (it
+   * supersedes the old one) or when the Countdown is cancelled.
+   */
   resetSetup(): void {
     this.setupCount = 0;
     this.setupBar1Index = null;
     this.setupBar1Date = null;
+    this.setupBarIndices = [];
+    this.setupExtensionCount = 0;
+  }
+
+  clearCompletedSetup(): void {
     this.setupBar9Index = null;
     this.setupBar9Date = null;
     this.setupCompleted = false;
     this.setupPerfected = false;
     this.setupPerfectionPending = false;
-    this.setupBarIndices = [];
-    this.setupExtensionCount = 0;
+    this.completedSetupBarIndices = [];
   }
 
   resetCountdown(): void {
@@ -248,9 +270,14 @@ export class SequentialTracker {
     });
 
     if (this.setupCount === cfg.setup.length) {
+      // A new Setup completion overrides any prior completed-Setup anchor.
       this.setupBar9Index = i;
       this.setupBar9Date = date;
       this.setupCompleted = true;
+      // Freeze the bar indices that defined this Setup so the late-
+      // perfection lookahead and recycle range math survive future resets
+      // of the in-progress count.
+      this.completedSetupBarIndices = [...this.setupBarIndices];
       events.push({
         indicator: "sequential",
         eventType: "setup_complete",
@@ -263,7 +290,7 @@ export class SequentialTracker {
       // Step 5: perfection check (initial; lookahead handled below)
       const perfNow = isPerfected(
         bars,
-        this.setupBarIndices,
+        this.completedSetupBarIndices,
         dir,
         cfg.setup.perfection.mode,
       );
@@ -282,12 +309,14 @@ export class SequentialTracker {
       }
     } else if (this.setupPerfectionPending && this.setupBar9Index != null) {
       // Late perfection check — bar i is within `lookaheadBars` of count 9.
+      // Read from the FROZEN indices so a reset in-between bars doesn't
+      // strand the lookahead.
       const barsSince = i - this.setupBar9Index;
       if (barsSince <= cfg.setup.perfection.lookaheadBars) {
         if (
           isLatePerfected(
             bars,
-            this.setupBarIndices,
+            this.completedSetupBarIndices,
             dir,
             i,
             cfg.setup.perfection.mode,

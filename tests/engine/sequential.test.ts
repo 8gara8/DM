@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DeMarkEngine, resolveConfig } from "../../src/engine";
-import { fromCloses } from "./_helpers";
+import { fromCloses, makeBars } from "./_helpers";
 
 describe("Sequential setup completion", () => {
   it("completes a Buy Setup at count 9 with a confirmed bearish flip", () => {
@@ -133,6 +133,60 @@ describe("Sequential TDST cancellation", () => {
     expect(breach).toBeDefined();
     expect(cancel).toBeDefined();
     expect(cancel?.meta?.reason).toBe("tdst_violation");
+  });
+});
+
+describe("Sequential countdown survives in-progress Setup resets", () => {
+  it("countdown still ticks on a post-9 bar that breaks the lookback rule then resumes", () => {
+    // Build a Buy Setup that completes at bar 13 (closes index 0..13).
+    const setupBars = makeBars("2024-01-01", [
+      [110, 110.5, 109.5, 110], // bar 0 — 5-bar pre-flip ramp
+      [111, 111.5, 110.5, 111],
+      [112, 112.5, 111.5, 112],
+      [113, 113.5, 112.5, 113],
+      [114, 114.5, 113.5, 114],
+      [109, 109.5, 108.5, 109], // bar 5 — bearish flip (count 1)
+      [108, 108.5, 107.5, 108], // count 2
+      [107, 107.5, 106.5, 107], // count 3
+      [106, 106.5, 105.5, 106], // count 4
+      [105, 105.5, 104.5, 105], // count 5
+      [104, 104.5, 103.5, 104], // count 6
+      [103, 103.5, 102.5, 103], // count 7
+      [102, 102.5, 101.5, 102], // count 8
+      [101, 101.5, 100.5, 101], // count 9 — Setup completes here
+    ]);
+
+    // Now append bars that:
+    //  - bar 14: lookback fails (close 110 NOT < bar 10's close 104)
+    //  - bar 15: a Buy Countdown qualifies (close ≤ low 2 ago)
+    //
+    // Bar 13's low is 100.5; its close is 101. We want bar 15's close to
+    // be ≤ bar 13's low (100.5). bar 14 has close 110, low 109.5. bar 15
+    // close 100, low 99.5 — close 100 ≤ bar 13's low 100.5 → Countdown 1.
+    const postBars = makeBars("2024-01-15", [
+      [110, 110.5, 109.5, 110], // bar 14 — lookback fails (resets in-progress Setup)
+      [100, 100.5, 99.5, 100], //  bar 15 — close 100 ≤ bar 13 low 100.5 → buy countdown count 1
+    ]);
+    const all = setupBars.concat(postBars);
+    const engine = new DeMarkEngine();
+    const { events } = engine.run(all);
+
+    // Sanity: Setup completed
+    expect(
+      events.find((e) => e.eventType === "setup_complete" && e.direction === "buy"),
+    ).toBeDefined();
+
+    // The Sequential countdown must NOT be permanently frozen by the
+    // bar 14 in-progress Setup reset. (Combo's retroactive counts are
+    // separate — filter to indicator=sequential.)
+    const buySeqCountdownCounts = events.filter(
+      (e) =>
+        e.eventType === "countdown_count" &&
+        e.direction === "buy" &&
+        e.indicator === "sequential",
+    );
+    expect(buySeqCountdownCounts.length).toBeGreaterThanOrEqual(1);
+    expect(buySeqCountdownCounts[0]?.barDate).toBe(all[15]!.date);
   });
 });
 
