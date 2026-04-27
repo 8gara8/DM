@@ -14,7 +14,14 @@ async function main() {
 
   // Apply the migration
   const fs = await import("fs/promises");
-  const migrationSql = await fs.readFile("./drizzle/0000_stale_wong.sql", "utf-8");
+  // Resolve the latest 0000 migration dynamically — drizzle-kit names it
+  // (e.g. 0000_stale_wong.sql, 0000_concerned_purifiers.sql) based on
+  // schema state, so don't hardcode the random suffix.
+  const migrationFile = (await fs.readdir("./drizzle"))
+    .filter((f) => /^0000_.*\.sql$/.test(f))
+    .sort()[0];
+  if (!migrationFile) throw new Error("no 0000_*.sql migration found in drizzle/");
+  const migrationSql = await fs.readFile(`./drizzle/${migrationFile}`, "utf-8");
   for (const stmt of migrationSql.split("--> statement-breakpoint")) {
     const cleaned = stmt.trim();
     if (cleaned) await client.execute(cleaned);
