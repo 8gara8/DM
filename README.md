@@ -1,110 +1,66 @@
-# DeMark Indicators Daily Monitor
+# DM
 
-Track TD Sequential, TD Combo, and composite DeMark patterns across a managed watchlist of securities. Get daily alerts when signals complete, approach completion, or when key TDST levels are breached.
+Small-crew DeMark signal monitor. Tracks TD Sequential + TD Combo across
+daily / weekly / monthly / yearly bars on a shared watchlist.
 
-## Features (Phase 1 — MVP)
+> Public-source DeMark-style approximation. Not a licensed DeMARK product.
+> "DeMARK" / "TD" / the indicator names are trademarks of their respective owners.
 
-- **TD Sequential Engine** — Setup (9-count) and Countdown (13-count) calculation
-- **TDST Levels** — Support/resistance levels derived from Setup initiation bars
-- **Setup Perfection** — Detection of perfected Buy/Sell Setups
-- **SQLite Storage** — Persistent watchlist, signal states, and alert history
-- **CLI Interface** — Manage watchlist, run scans, view results from the terminal
-- **Web Dashboard** — Simple daily check-in page showing all active signals
+## Status
 
-## Quick Start
+Phase 1 + Phase 2 of `SPEC.md` are in:
 
-```bash
-# Install (required — registers the `demark` command)
-pip install -e ".[dev]"
+- ✅ Next.js 15 + TypeScript + Tailwind v4 scaffolding
+- ✅ Drizzle schema (Turso/libSQL) + Auth.js v5 (Google + allowlist)
+- ✅ Pure-TS DeMark engine: TD Sequential, TD Combo (V1/V2/aggressive),
+      TDST, perfection (with late-perfection lookahead), 13-vs-8 deferral,
+      TDST/opposing-Setup cancellation, recycling (count-22 + range-ratio),
+      Risk Level, 9-13-9 composite, `serialize()`/`restore()` with
+      `configHash`, no-lookahead-aware backtest helper
+- ✅ 34 vitest unit tests covering flip / setup / perfection / TDST /
+      recycle / risk / snapshot round-trip / backtest / resample
+- ✅ `parity-check.ts` script (fixture corpus to be filled in)
+- ✅ Page shells for `/`, `/access-denied`, `/alerts`, `/scans`,
+      `/api/auth/[...nextauth]`, `/api/cron/scan`
+- ⏳ Phases 3–6 (data layer, scan pipeline, ticker detail, charts,
+      Combo backtest, polish) per `SPEC.md`
 
-# Add tickers to your watchlist
-demark add SPY QQQ AAPL MSFT --tag index
+The Phase-1 Python codebase has been preserved verbatim under `legacy/`
+per `SPEC.md` §9. Don't edit it.
 
-# Run a scan
-demark scan
-
-# Launch the web dashboard
-demark dashboard
-
-# Run tests
-pytest
-```
-
-> **Note:** If the `demark` command isn't found after install (common on Windows
-> where the Scripts folder isn't on PATH), use `python -m demark` instead:
-> ```bash
-> python -m demark dashboard
-> python -m demark scan
-> python -m demark add AAPL
-> ```
-
-## CLI Commands
+## Run locally
 
 ```bash
-demark add AAPL MSFT GOOGL --tag tech    # Add tickers
-demark remove TSLA                        # Remove a ticker
-demark list                               # List all watched tickers
-demark list --tag tech                    # Filter by tag
-demark scan                               # Run DeMark scan on all tickers
-demark scan --ticker AAPL                 # Scan a single ticker
-demark dashboard                          # Launch web dashboard
-demark export watchlist.json              # Export watchlist
-demark import watchlist.json              # Import watchlist
+pnpm install
+cp .env.example .env.local         # then fill in Auth + Turso + ALLOWED_EMAILS
+pnpm seed                          # one-time: seeds owner user + default watchlist
+pnpm dev
 ```
 
-## Configuration
+## Test / lint / build
 
-Edit `config.yaml` to adjust settings:
-
-- Data source provider and API keys
-- Database path
-- Default watchlist tickers
-- Active timeframes
-- Alert thresholds
-- Dashboard host/port
-- Schedule time and timezone
-
-## Project Structure
-
-```
-demark-monitor/
-├── config.yaml              # Configuration
-├── pyproject.toml           # Dependencies and project metadata
-├── demark/
-│   ├── engine/              # Core DeMark calculation logic
-│   │   ├── sequential.py    # TD Sequential (Setup + Countdown)
-│   │   └── tdst.py          # TDST level calculation
-│   ├── data/                # Data fetching and caching
-│   │   └── provider.py      # yfinance data provider
-│   ├── storage/             # SQLite models and queries
-│   │   └── db.py
-│   ├── alerts/              # Alert generation
-│   │   └── alerts.py
-│   ├── dashboard/           # Web UI (Flask)
-│   │   ├── app.py
-│   │   └── templates/
-│   └── cli.py               # CLI entry point
-└── tests/
-    ├── test_sequential.py   # Unit tests for TD Sequential
-    └── test_storage.py      # Storage layer tests
+```bash
+pnpm typecheck   # strict TS
+pnpm test        # vitest unit + property tests
+pnpm parity      # engine fixture parity
+pnpm build       # next build
 ```
 
-## DeMark Indicator Rules
+## Layout
 
-### TD Sequential Setup (9-count)
-- **Buy Setup**: 9 consecutive closes < close 4 bars earlier
-- **Sell Setup**: 9 consecutive closes > close 4 bars earlier
-- Perfection: bar 8 or 9 low/high exceeds bars 6 and 7
+```
+src/
+├── app/             # Next.js App Router pages + API routes
+├── components/      # ui/, layout/, features/
+├── engine/          # Pure-TS DeMark engine (no Next/React imports)
+├── data/            # provider + resample
+├── server/          # auth, scan orchestrator (Phase 3)
+├── lib/             # db, time, ids, format, utils
+└── styles/          # globals.css (design tokens)
+tests/engine/        # vitest fixtures + property tests
+scripts/             # parity-check.ts, seed.ts
+legacy/              # Phase-1 Python — read-only
+```
 
-### TD Sequential Countdown (13-count)
-- **Buy Countdown**: Close <= low 2 bars earlier (non-consecutive, counts to 13)
-- **Sell Countdown**: Close >= high 2 bars earlier (non-consecutive, counts to 13)
-- Qualification: bar 13 close vs bar 8 close comparison
-
-### TDST Levels
-- Support: true high of the bar before Buy Setup bar 1
-- Resistance: true low of the bar before Sell Setup bar 1
-
-## License
-
-MIT
+See `SPEC.md` for the full build plan, `src/engine/README.md` for engine
+docs (incl. departures from the legacy Python).

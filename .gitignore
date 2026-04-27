@@ -1,17 +1,31 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-*.egg-info/
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Build
 dist/
 build/
-*.egg
 
-# Virtual environments
-venv/
-.venv/
-env/
+# Env
+.env
+.env.local
+.env.*.local
+
+# Drizzle / SQLite local
+local.db
+local.db-journal
+*.sqlite
+*.sqlite3
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+.playwright/
 
 # IDE
 .idea/
@@ -19,21 +33,19 @@ env/
 *.swp
 *.swo
 
-# Database
-*.db
-
-# Config overrides
-config.local.yaml
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Testing
-.pytest_cache/
-htmlcov/
-.coverage
+# Logs
+*.log
+pnpm-debug.log*
+npm-debug.log*
 
-# Distribution
-*.tar.gz
-*.whl
+# Legacy Python (kept around but not active)
+legacy/**/__pycache__/
+legacy/**/*.py[cod]
+legacy/**/*.egg-info/
+legacy/.pytest_cache/
+legacy/.coverage
+legacy/htmlcov/
