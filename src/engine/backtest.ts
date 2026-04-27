@@ -48,9 +48,9 @@ function findIndexByDate(bars: Bar[], date: string): number {
   return -1;
 }
 
-function pctReturn(direction: Direction, entryClose: number, exitClose: number): number {
-  if (direction === "buy") return (exitClose - entryClose) / entryClose;
-  return (entryClose - exitClose) / entryClose;
+function pctReturn(direction: Direction, entryPrice: number, exitPrice: number): number {
+  if (direction === "buy") return (exitPrice - entryPrice) / entryPrice;
+  return (entryPrice - exitPrice) / entryPrice;
 }
 
 export function computeSignalBacktest(
@@ -76,7 +76,10 @@ export function computeSignalBacktest(
   const entryIdx = knownAtIdx + 1;
   if (entryIdx >= bars.length) return out;
 
-  const entryClose = bars[entryIdx]!.close;
+  // Per the no-lookahead policy: enter at the OPEN of the bar after
+  // firstKnownAt — not at any close. Using close would make returns
+  // ignore opening gaps.
+  const entryOpen = bars[entryIdx]!.open;
   out.entryBarIndex = entryIdx;
   out.entryBarDate = bars[entryIdx]!.date;
 
@@ -87,13 +90,13 @@ export function computeSignalBacktest(
   ];
 
   let mfe = 0;
-  for (let k = 1; k <= 21 && entryIdx + k < bars.length; k++) {
+  for (let k = 0; k <= 21 && entryIdx + k < bars.length; k++) {
     const idx = entryIdx + k;
     const px =
       signal.direction === "buy" ? bars[idx]!.high : bars[idx]!.low;
-    const r = pctReturn(signal.direction, entryClose, px);
+    const r = pctReturn(signal.direction, entryOpen, px);
     if (r > mfe) mfe = r;
-    if (options.stopLevel != null) {
+    if (options.stopLevel != null && k > 0) {
       const stopHit =
         signal.direction === "buy"
           ? bars[idx]!.low <= options.stopLevel
@@ -109,7 +112,7 @@ export function computeSignalBacktest(
   for (const [n, key] of horizons) {
     const targetIdx = entryIdx + n;
     if (targetIdx >= bars.length) continue;
-    out[key] = pctReturn(signal.direction, entryClose, bars[targetIdx]!.close);
+    out[key] = pctReturn(signal.direction, entryOpen, bars[targetIdx]!.close);
   }
 
   return out;

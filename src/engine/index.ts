@@ -156,20 +156,10 @@ export class DeMarkEngine {
 
     // Step 7: cancellation
     events.push(
-      ...this.buySeq.evaluateCancellation(
-        bars,
-        i,
-        sellSetupCompletedThisBar,
-        this.sellSeq.tdstLevel,
-      ),
+      ...this.buySeq.evaluateCancellation(bars, i, sellSetupCompletedThisBar),
     );
     events.push(
-      ...this.sellSeq.evaluateCancellation(
-        bars,
-        i,
-        buySetupCompletedThisBar,
-        this.buySeq.tdstLevel,
-      ),
+      ...this.sellSeq.evaluateCancellation(bars, i, buySetupCompletedThisBar),
     );
     events.push(
       ...this.buyCombo.evaluateCancellation(bars, i, sellSetupCompletedThisBar),
@@ -284,6 +274,7 @@ export class DeMarkEngine {
         asOfBarDate: "",
         asOfBarIndex: -1,
         trackers: [],
+        compositeWatchers: [],
         flipState: { lastBarIndex: -1 },
       };
     }
@@ -297,6 +288,7 @@ export class DeMarkEngine {
         this.buyCombo.toSnapshot(),
         this.sellCombo.toSnapshot(),
       ],
+      compositeWatchers: this.composite.snapshot(),
       flipState: { lastBarIndex: this.lastBarIndex },
     };
   }
@@ -326,6 +318,9 @@ export class DeMarkEngine {
         engine.sellCombo = ComboTracker.fromSnapshot(t, cfg);
       }
     }
+    if (snapshot.compositeWatchers && snapshot.compositeWatchers.length > 0) {
+      engine.composite.restore(snapshot.compositeWatchers);
+    }
     engine.lastBarIndex = snapshot.asOfBarIndex;
     return engine;
   }
@@ -343,5 +338,6 @@ export type {
   EventType,
   EngineSnapshot,
   DirectionalSnapshot,
+  CompositeWatcherSnapshot,
   Timeframe,
 } from "./types";

@@ -339,7 +339,6 @@ export class SequentialTracker {
     bars: Bar[],
     i: number,
     opposingSetupCompletedThisBar: boolean,
-    opposingTdstLevel: number | null,
   ): SignalEvent[] {
     const events: SignalEvent[] = [];
     if (!this.countdownActive) return events;
@@ -362,10 +361,11 @@ export class SequentialTracker {
       return events;
     }
 
-    if (cfg.tdstViolationEnabled && opposingTdstLevel != null) {
-      // Buy Countdown cancels if the bar lifts above the (Sell) TDST
-      // resistance — but the TDST relevant for cancellation is OUR side's
-      // anchor against price. Modern: Buy cancels if `trueLow > buyResistance`.
+    // Modern public TDST cancellation test: Buy Countdown cancels if
+    // `trueLow > buyTdstResistance` (the entire bar lifts above the
+    // resistance, not just the close). The relevant level is OUR own
+    // direction's TDST level — there's no opposing-level dependency.
+    if (cfg.tdstViolationEnabled) {
       if (this.tdstLevel != null) {
         const breached = tdstBreached(
           bars,

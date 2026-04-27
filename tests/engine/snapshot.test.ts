@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DeMarkEngine, resolveConfig } from "../../src/engine";
+import { CompositeDetector } from "../../src/engine/composite";
 import { fromCloses } from "./_helpers";
 
 describe("serialize/restore", () => {
@@ -37,6 +38,38 @@ describe("serialize/restore", () => {
       .filter((e) => e.eventType === "setup_complete")
       .map((e) => e.barDate);
     expect(bComplete).toEqual(aComplete);
+  });
+
+  it("persists and restores composite watchers (pending 9-13-9 state)", () => {
+    const cfg = resolveConfig();
+    // Set up a CompositeDetector with a pending watcher and round-trip via
+    // an engine snapshot to ensure 9-13-9 candidates survive a resume.
+    const engine = new DeMarkEngine(cfg);
+    // run a tiny series so lastBarIndex >= 0 (otherwise serialize returns
+    // an empty snapshot)
+    engine.run(fromCloses([1, 2, 3, 4, 5, 6]));
+
+    // Manually introduce a pending watcher via the composite detector
+    const compositeField = engine as unknown as {
+      composite: CompositeDetector;
+    };
+    compositeField.composite.onCountdownComplete("buy", "2024-01-10");
+    compositeField.composite.onSameDirectionFlip("buy");
+
+    const snap = engine.serialize();
+    expect(snap.compositeWatchers).toHaveLength(1);
+    expect(snap.compositeWatchers[0]).toMatchObject({
+      direction: "buy",
+      thirteenBarDate: "2024-01-10",
+      hadConfirmingFlip: true,
+    });
+
+    const resumed = DeMarkEngine.restore(snap, cfg);
+    const resumedComposite = (resumed as unknown as { composite: CompositeDetector })
+      .composite;
+    const events = resumedComposite.onSetupComplete("buy", "2024-01-30");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.eventType).toBe("signal_9_13_9");
   });
 
   it("rejects snapshot with mismatched configHash", () => {

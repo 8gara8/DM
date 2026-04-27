@@ -130,6 +130,13 @@ export interface DirectionalSnapshot {
   recycledThisBar: boolean;
 }
 
+export interface CompositeWatcherSnapshot {
+  direction: Direction;
+  thirteenBarDate: string;
+  invalidatedByOpposing: boolean;
+  hadConfirmingFlip: boolean;
+}
+
 /** Top-level snapshot bundle for an entire engine instance. */
 export interface EngineSnapshot {
   configHash: string;
@@ -137,6 +144,8 @@ export interface EngineSnapshot {
   asOfBarIndex: number;
   /** flat list keyed by direction+indicator. */
   trackers: DirectionalSnapshot[];
+  /** Pending 9-13-9 watchers. Empty array when no 13 is awaiting a trailing 9. */
+  compositeWatchers: CompositeWatcherSnapshot[];
   /** Last close for each direction's price-flip detector. */
   flipState: { lastBarIndex: number };
 }

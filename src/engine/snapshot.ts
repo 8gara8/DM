@@ -20,6 +20,7 @@ export function emptySnapshot(configHash: string): EngineSnapshot {
     asOfBarDate: "",
     asOfBarIndex: -1,
     trackers: [],
+    compositeWatchers: [],
     flipState: { lastBarIndex: -1 },
   };
 }

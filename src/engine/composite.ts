@@ -36,9 +36,14 @@ export class CompositeDetector {
     });
   }
 
+  /**
+   * `direction` here = the side whose pending 9-13-9 watcher should be
+   * invalidated (i.e. NOT the side that just completed). Callers in
+   * `index.ts` pass the OPPOSING direction explicitly.
+   */
   onOpposingSetupComplete(direction: Direction): void {
     for (const w of this.watchers) {
-      if (w.direction !== direction) w.invalidatedByOpposing = true;
+      if (w.direction === direction) w.invalidatedByOpposing = true;
     }
   }
 

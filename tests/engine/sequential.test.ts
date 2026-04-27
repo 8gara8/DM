@@ -90,6 +90,52 @@ describe("Sequential setup completion", () => {
   });
 });
 
+describe("Sequential TDST cancellation", () => {
+  it("cancels an active Buy Countdown when own TDST resistance breaches, even without an opposing TDST", () => {
+    // Build a Buy Setup completion at bar 13, then append a bar whose
+    // close clearly exceeds the Buy TDST resistance. Use the close
+    // breakout test for an unambiguous one-bar breach (true_range test
+    // would also work but requires the prior close to lift first).
+    const cfg = resolveConfig({
+      tdst: { anchor: "extreme_of_setup", breakoutTest: "close", persistAcrossCountdowns: true },
+    });
+    const setupCloses = [
+      110, 111, 112, 113, 114, 109, 108, 107, 106, 105, 104, 103, 102, 101,
+    ];
+    const setupBars = setupCloses.map((c, i) => ({
+      date: `2024-01-${String(i + 1).padStart(2, "0")}`,
+      open: c,
+      high: c + 0.5,
+      low: c - 0.5,
+      close: c,
+    }));
+    const engine = new DeMarkEngine(cfg);
+    const r1 = engine.run(setupBars);
+    const setupComplete = r1.events.find(
+      (e) => e.eventType === "setup_complete" && e.direction === "buy",
+    );
+    expect(setupComplete).toBeDefined();
+
+    const breachBar = {
+      date: "2024-01-15",
+      open: 200,
+      high: 210,
+      low: 199,
+      close: 205,
+    };
+    const r2 = engine.process(setupBars.concat([breachBar]), setupBars.length);
+    const cancel = r2.events.find(
+      (e) => e.eventType === "countdown_cancel" && e.direction === "buy",
+    );
+    const breach = r2.events.find(
+      (e) => e.eventType === "tdst_breach" && e.direction === "buy",
+    );
+    expect(breach).toBeDefined();
+    expect(cancel).toBeDefined();
+    expect(cancel?.meta?.reason).toBe("tdst_violation");
+  });
+});
+
 describe("Sequential invariants", () => {
   it("setup count cannot jump by more than 1 per bar", () => {
     const closes = [110, 111, 112, 113, 114, 109, 108, 107, 106, 105, 104, 103, 102, 101];
