@@ -1,25 +1,29 @@
-import { NextResponse } from "next/server";
-
 /**
- * Cron stub. Phase 3 wires this to the real scan orchestrator. For now
- * we authenticate the bearer token and return 200 so Vercel's scheduler
- * can be wired up immediately.
+ * Cron entry point. Vercel attaches `Authorization: Bearer ${CRON_SECRET}`
+ * automatically when the cron is configured; we double-check the header.
+ *
+ * Behavior is identical to a `POST /api/scan` with no filters but with
+ * `trigger: "cron"`.
  */
-export async function POST(req: Request) {
+import { err, ok, withErrors } from "@/lib/api";
+import { runScan } from "@/server/scan";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 300; // 5min for scans across the watchlist
+
+export const POST = withErrors(async (req) => {
   const auth = req.headers.get("authorization") ?? "";
   const expected = `Bearer ${process.env.CRON_SECRET ?? ""}`;
   if (!process.env.CRON_SECRET || auth !== expected) {
-    return NextResponse.json(
-      { data: null, error: { code: "UNAUTHENTICATED", message: "missing or invalid cron secret" } },
-      { status: 401 },
-    );
+    return err("UNAUTHENTICATED", "missing or invalid cron secret", 401);
   }
-  return NextResponse.json({ data: { scanRunId: null, note: "phase-1 stub" } });
-}
+  const result = await runScan({ trigger: "cron", triggeredBy: null });
+  return ok(result);
+});
 
 export async function GET() {
-  return NextResponse.json(
-    { data: null, error: { code: "METHOD_NOT_ALLOWED", message: "POST only" } },
-    { status: 405 },
+  return new Response(
+    JSON.stringify({ data: null, error: { code: "METHOD_NOT_ALLOWED", message: "POST only" } }),
+    { status: 405, headers: { "content-type": "application/json" } },
   );
 }
