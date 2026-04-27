@@ -26,7 +26,7 @@
     "@auth/drizzle-adapter": "^1.7.0",
     "drizzle-orm": "^0.36.0",
     "@libsql/client": "^0.14.0",
-    "yahoo-finance2": "^2.13.0",
+    "yahoo-finance2": "^3.14.0",
     "lightweight-charts": "^4.2.0",
     "zod": "^3.23.0",
     "date-fns": "^4.0.0",
