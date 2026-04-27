@@ -12,7 +12,7 @@ export default async function DashboardPage() {
           <h1 className="mb-2 text-lg font-medium">Sign in</h1>
           <p className="mb-4 text-sm text-text-muted">
             DM is private to a small crew. Sign in with Google; if your email
-            isn't on the allowlist you'll be redirected to{" "}
+            isn&apos;t on the allowlist you&apos;ll be redirected to{" "}
             <Link href="/access-denied" className="text-accent">
               /access-denied
             </Link>
