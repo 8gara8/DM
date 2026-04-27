@@ -383,9 +383,9 @@ async function upsertSignalState(
         signalStatesTable.ticker,
         signalStatesTable.timeframe,
         signalStatesTable.indicator,
+        signalStatesTable.direction,
       ],
       set: {
-        direction: row.direction,
         phase: row.phase,
         count: row.count,
         isPerfected: row.isPerfected,

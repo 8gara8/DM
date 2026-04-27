@@ -5,7 +5,6 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
 import * as schema from "../src/lib/db/schema";
-import { sql } from "drizzle-orm";
 import { composeDashboardPayload, clearDashboardCacheFor } from "../src/server/dashboard";
 
 async function main() {

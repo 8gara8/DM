@@ -124,7 +124,7 @@ export const signalStates = sqliteTable(
       enum: ["daily", "weekly", "monthly", "yearly"],
     }).notNull(),
     indicator: text("indicator", { enum: ["sequential", "combo"] }).notNull(),
-    direction: text("direction", { enum: ["buy", "sell"] }),
+    direction: text("direction", { enum: ["buy", "sell"] }).notNull(),
     phase: text("phase", { enum: ["none", "setup", "countdown"] })
       .notNull()
       .default("none"),
@@ -143,7 +143,7 @@ export const signalStates = sqliteTable(
     updatedAt: text("updatedAt").notNull(),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.ticker, t.timeframe, t.indicator] }),
+    pk: primaryKey({ columns: [t.ticker, t.timeframe, t.indicator, t.direction] }),
   }),
 );
 

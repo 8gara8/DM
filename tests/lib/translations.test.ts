@@ -156,6 +156,27 @@ describe("translation templates", () => {
     expect(r.templateId).toBe("9-13-9-composite");
   });
 
+
+  it("translate() picks deferred-13 over imminent-13 when both could match (Codex P2)", () => {
+    const r = translate({
+      primary: {
+        direction: "buy",
+        indicator: "sequential",
+        phase: "countdown",
+        count: 12,
+        max: 13,
+        timeframe: "weekly",
+        isPerfected: false,
+        isQualified: false,
+        isDeferred: true,
+        isJust9_13_9: false,
+      },
+      confluence: [],
+    });
+    expect(r.templateId).toBe("deferred-13");
+    expect(r.text).toContain("awaiting a bar that satisfies both rules");
+  });
+
   it("translate() falls back to generic factual when nothing matches", () => {
     const r = translate({
       primary: {

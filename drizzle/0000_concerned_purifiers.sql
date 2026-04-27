@@ -107,7 +107,7 @@ CREATE TABLE `signal_states` (
 	`ticker` text NOT NULL,
 	`timeframe` text NOT NULL,
 	`indicator` text NOT NULL,
-	`direction` text,
+	`direction` text NOT NULL,
 	`phase` text DEFAULT 'none' NOT NULL,
 	`count` integer DEFAULT 0 NOT NULL,
 	`isPerfected` integer DEFAULT false NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE `signal_states` (
 	`engineStateJson` text,
 	`asOfBarDate` text NOT NULL,
 	`updatedAt` text NOT NULL,
-	PRIMARY KEY(`ticker`, `timeframe`, `indicator`)
+	PRIMARY KEY(`ticker`, `timeframe`, `indicator`, `direction`)
 );
 --> statement-breakpoint
 CREATE TABLE `users` (

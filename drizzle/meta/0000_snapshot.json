@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "611da748-4175-49e3-9d2f-255e4140f6f4",
+  "id": "b19c3524-7fa0-4f4a-af74-902de8a2cf7e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -734,7 +734,7 @@
           "name": "direction",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "phase": {
@@ -843,13 +843,14 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "signal_states_ticker_timeframe_indicator_pk": {
+        "signal_states_ticker_timeframe_indicator_direction_pk": {
           "columns": [
             "ticker",
             "timeframe",
-            "indicator"
+            "indicator",
+            "direction"
           ],
-          "name": "signal_states_ticker_timeframe_indicator_pk"
+          "name": "signal_states_ticker_timeframe_indicator_direction_pk"
         }
       },
       "uniqueConstraints": {},
