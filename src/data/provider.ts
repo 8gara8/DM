@@ -19,7 +19,8 @@ export interface DataProvider {
 
 export class YahooFinance2Provider implements DataProvider {
   async fetchDailyBars(ticker: string, fromDate?: string): Promise<Bar[]> {
-    const yf = (await import("yahoo-finance2")).default;
+    const { default: YahooFinance } = await import("yahoo-finance2");
+    const yf = new YahooFinance();
     const period1 = fromDate ?? "2000-01-01";
     const result = await yf.chart(ticker, {
       period1,
