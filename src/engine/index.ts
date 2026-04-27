@@ -112,28 +112,15 @@ export class DeMarkEngine {
       !sellWasSetupCompletedBefore &&
       this.sellSeq.setupBar9Index === i;
 
-    // Step 6: TDST level for newly completed Setups
+    // Step 6: TDST level for newly completed Setups. (priorSetupRange is
+    // updated AFTER the recycle step in step 12, so the recycle's range
+    // ratio compares the new Setup against the PREVIOUS one.)
     if (buySetupCompletedThisBar) {
-      // store prior range for potential range-ratio recycle on the NEXT setup
-      if (this.buySeq.setupBar1Index != null && this.buySeq.setupBar9Index != null) {
-        this.buySeq.priorSetupRange = calcSetupRange(
-          bars,
-          this.buySeq.setupBar1Index,
-          this.buySeq.setupBar9Index,
-        );
-      }
       this.buySeq.applyNewTdst(bars);
       this.buyCombo.tdstLevel = this.buySeq.tdstLevel;
       this.buyCombo.tdstAnchorBarDate = this.buySeq.tdstAnchorBarDate;
     }
     if (sellSetupCompletedThisBar) {
-      if (this.sellSeq.setupBar1Index != null && this.sellSeq.setupBar9Index != null) {
-        this.sellSeq.priorSetupRange = calcSetupRange(
-          bars,
-          this.sellSeq.setupBar1Index,
-          this.sellSeq.setupBar9Index,
-        );
-      }
       this.sellSeq.applyNewTdst(bars);
       this.sellCombo.tdstLevel = this.sellSeq.tdstLevel;
       this.sellCombo.tdstAnchorBarDate = this.sellSeq.tdstAnchorBarDate;
@@ -206,9 +193,34 @@ export class DeMarkEngine {
       this.composite.onCountdownComplete("sell", bar.date);
     }
 
-    // Step 12: recycling
-    events.push(...this.buySeq.evaluateRecycle(bars));
-    events.push(...this.sellSeq.evaluateRecycle(bars));
+    // Step 12: recycling. Then update `priorSetupRange` for next time —
+    // doing it here (after evaluateRecycle) ensures the range-ratio
+    // trigger compares THIS new Setup's range against the PREVIOUS
+    // completed Setup, not against itself.
+    events.push(...this.buySeq.evaluateRecycle(bars, i, buySetupCompletedThisBar));
+    events.push(...this.sellSeq.evaluateRecycle(bars, i, sellSetupCompletedThisBar));
+    if (
+      buySetupCompletedThisBar &&
+      this.buySeq.setupBar1Index != null &&
+      this.buySeq.setupBar9Index != null
+    ) {
+      this.buySeq.priorSetupRange = calcSetupRange(
+        bars,
+        this.buySeq.setupBar1Index,
+        this.buySeq.setupBar9Index,
+      );
+    }
+    if (
+      sellSetupCompletedThisBar &&
+      this.sellSeq.setupBar1Index != null &&
+      this.sellSeq.setupBar9Index != null
+    ) {
+      this.sellSeq.priorSetupRange = calcSetupRange(
+        bars,
+        this.sellSeq.setupBar1Index,
+        this.sellSeq.setupBar9Index,
+      );
+    }
 
     // Step 13: risk levels for newly completed 13s
     if (this.buySeq.countdownComplete && this.buySeq.countdownBar13Index === i) {

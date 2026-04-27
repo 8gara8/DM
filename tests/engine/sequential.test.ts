@@ -190,6 +190,149 @@ describe("Sequential countdown survives in-progress Setup resets", () => {
   });
 });
 
+describe("Sequential countdown caps at 13", () => {
+  it("does not emit count 14+ on bars after countdown_complete", () => {
+    // 14 bars to set up + complete a Buy Setup, then a long stretch of
+    // bars with close ≤ low 2 ago to drive the Countdown to 13 and beyond.
+    // We use simple monotone closes 100..40 so every post-setup bar
+    // qualifies for the Buy Countdown rule.
+    const closes: number[] = [];
+    // Pre-flip ramp: 5 bars rising
+    for (let i = 0; i < 5; i++) closes.push(110 + i);
+    // 9 bars decreasing for the Setup
+    for (let i = 0; i < 9; i++) closes.push(109 - i);
+    // 30 bars further decreasing — every bar should qualify for the
+    // countdown until 13 prints, then NOTHING further should print.
+    for (let i = 0; i < 30; i++) closes.push(100 - i);
+    const bars = fromCloses(closes);
+    const engine = new DeMarkEngine();
+    const { events } = engine.run(bars);
+    const buySeqCounts = events.filter(
+      (e) =>
+        e.eventType === "countdown_count" &&
+        e.direction === "buy" &&
+        e.indicator === "sequential",
+    );
+    // The maximum count emitted must be exactly 13, never higher.
+    const maxCount = Math.max(...buySeqCounts.map((e) => e.count!));
+    expect(maxCount).toBe(13);
+    // Exactly one count_13 event.
+    const count13 = buySeqCounts.filter((e) => e.count === 13);
+    expect(count13).toHaveLength(1);
+  });
+});
+
+describe("Sequential setup_recycle uses current bar date", () => {
+  it("recycle event's barDate is the bar processed, not the last bar of history", () => {
+    // Build a 22-bar Buy Setup extension to trigger the count-22
+    // recycle, plus extra trailing bars so the recycle bar is NOT the
+    // last bar of the array. 5-bar pre-ramp + 22 strict-decreasing
+    // closes + 5 trailing flat bars.
+    const closes: number[] = [];
+    for (let i = 0; i < 5; i++) closes.push(110 + i);
+    for (let i = 0; i < 22; i++) closes.push(109 - i);
+    for (let i = 0; i < 5; i++) closes.push(50);
+    const bars = fromCloses(closes);
+    const engine = new DeMarkEngine();
+    let recycleEvent: { barDate: string } | undefined;
+    let recycleProcessedAt: string | undefined;
+    for (let i = 0; i < bars.length; i++) {
+      const r = engine.process(bars, i);
+      const ev = r.events.find((e) => e.eventType === "setup_recycle");
+      if (ev) {
+        recycleEvent = { barDate: ev.barDate };
+        recycleProcessedAt = bars[i]!.date;
+        break;
+      }
+    }
+    expect(recycleEvent).toBeDefined();
+    expect(recycleEvent!.barDate).toBe(recycleProcessedAt);
+    expect(recycleEvent!.barDate).not.toBe(bars[bars.length - 1]!.date);
+  });
+});
+
+describe("Sequential late-perfection on broken-lookback bars", () => {
+  it("emits setup_perfected late when a swing bar within lookaheadBars confirms after the count breaks", () => {
+    // A Buy Setup that completes WITHOUT immediate perfection: bars 8 and
+    // 9's lows do NOT undercut min(bar 6 low, bar 7 low). Then a bar
+    // within the lookahead window has a low that DOES undercut — a real
+    // late-perfection trigger.
+    //
+    // Build:
+    //   bars 0-4: pre-flip ramp (closes 110..114, lows match)
+    //   bars 5-13 (Setup count 1..9): closes 109..101, lows
+    //     idx 5: low 108  (count 1)
+    //     idx 6: low 107  (2)
+    //     idx 7: low 106  (3)
+    //     idx 8: low 105  (4)
+    //     idx 9: low 104  (5)
+    //     idx 10: low 90  (6 — bar 6: low 90)
+    //     idx 11: low 91  (7 — bar 7: low 91)
+    //     idx 12: low 95  (8 — bar 8: low 95, NOT below min(90,91))
+    //     idx 13: low 96  (9 — bar 9: low 96, NOT below min(90,91))
+    //   bar 14: lookback fails (close 105 NOT < bar 10 close 104) → break
+    //           but bar 14's low = 85 → DOES undercut min(90, 91) → late perfection
+    const bars = makeBars("2024-01-01", [
+      [110, 110, 109, 110],
+      [111, 111, 110, 111],
+      [112, 112, 111, 112],
+      [113, 113, 112, 113],
+      [114, 114, 113, 114],
+      [109, 109, 108, 109], // count 1
+      [108, 108, 107, 108], // 2
+      [107, 107, 106, 107], // 3
+      [106, 106, 105, 106], // 4
+      [105, 105, 104, 105], // 5
+      [104, 104, 90, 104], //  6 — low 90
+      [103, 103, 91, 103], //  7 — low 91
+      [102, 102, 95, 102], //  8 — low 95
+      [101, 101, 96, 101], //  9 — low 96 → NOT initially perfected
+      [105, 105, 85, 105], //  bar 14 — count breaks but low 85 perfects late
+    ]);
+    const engine = new DeMarkEngine();
+    const { events } = engine.run(bars);
+
+    const perfections = events.filter(
+      (e) => e.eventType === "setup_perfected" && e.direction === "buy",
+    );
+    expect(perfections).toHaveLength(1);
+    // Late perfection metadata
+    expect(perfections[0]?.meta?.late).toBe(true);
+    // The event's firstKnownAtDate is the bar that confirmed it, not bar 9.
+    expect(perfections[0]?.firstKnownAtDate).toBe(bars[14]!.date);
+    expect(perfections[0]?.barDate).toBe(bars[13]!.date);
+  });
+});
+
+describe("Sequential annotation persists setupCompleted across extension", () => {
+  it("setupCompleted stays true on extension bars (count 10, 11, ...)", () => {
+    // Run a Setup that extends past 9.
+    const closes: number[] = [];
+    for (let i = 0; i < 5; i++) closes.push(110 + i);
+    for (let i = 0; i < 12; i++) closes.push(109 - i); // 12 strictly-decreasing closes
+    const bars = fromCloses(closes);
+    const engine = new DeMarkEngine();
+    const { annotations } = engine.run(bars);
+
+    // Find the Setup-9 bar: count goes 1..9 on bars 5..13.
+    const buySeqAnnotations = annotations.filter(
+      (a) => a.indicator === "sequential" && a.setupDirection === "buy",
+    );
+    // The annotation at the bar of count 9 should report setupCompleted.
+    const a9 = buySeqAnnotations.find((a) => a.setupCount === 9);
+    expect(a9?.setupCompleted).toBe(true);
+    // And annotations at counts 10, 11, 12 should ALSO report setupCompleted
+    // (the Setup is still completed; we're just extending past 9).
+    for (const c of [10, 11, 12]) {
+      const a = buySeqAnnotations.find((x) => x.setupCount === c);
+      expect(a, `expected annotation with setupCount=${c}`).toBeDefined();
+      expect(a?.setupCompleted, `setupCompleted should remain true at extension count ${c}`).toBe(
+        true,
+      );
+    }
+  });
+});
+
 describe("Sequential invariants", () => {
   it("setup count cannot jump by more than 1 per bar", () => {
     const closes = [110, 111, 112, 113, 114, 109, 108, 107, 106, 105, 104, 103, 102, 101];

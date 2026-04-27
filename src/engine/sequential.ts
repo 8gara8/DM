@@ -28,7 +28,7 @@ import { setupStartsHere } from "./flip";
 import { isPerfected, isLatePerfected } from "./perfection";
 import { calcTdstLevel, tdstBreached, trueHigh, trueLow } from "./tdst";
 import { calcRiskLevel, riskBreached } from "./risk";
-import { calcSetupRange, evaluateRecycle } from "./recycle";
+import { calcSetupRange } from "./recycle";
 
 export class SequentialTracker {
   readonly direction: Direction;
@@ -77,6 +77,13 @@ export class SequentialTracker {
   barsSince13: number | null = null;
 
   recycledThisBar = false;
+  /**
+   * Latched to `true` when a recycle fires on this Setup, cleared when a
+   * fresh in-progress count starts (count 0 → 1) or when the countdown
+   * is cancelled. Prevents the same recycle trigger from firing on every
+   * bar of an extended count once threshold is crossed.
+   */
+  recycledThisSetup = false;
 
   constructor(direction: Direction, config: EngineConfig) {
     this.direction = direction;
@@ -164,6 +171,8 @@ export class SequentialTracker {
     this.setupBar1Date = null;
     this.setupBarIndices = [];
     this.setupExtensionCount = 0;
+    // A new in-progress count is allowed to recycle again.
+    this.recycledThisSetup = false;
   }
 
   clearCompletedSetup(): void {
@@ -186,6 +195,7 @@ export class SequentialTracker {
     this.countdownBar13Index = null;
     this.countdownBar13Date = null;
     this.riskLevel = null;
+    this.recycledThisSetup = false;
   }
 
   /**
@@ -216,6 +226,10 @@ export class SequentialTracker {
     if (!lookbackOK) {
       // Equality or opposite side — Setup count breaks unless strict=false.
       this.resetSetup();
+      // Late perfection still applies to bars that broke the count, as
+      // long as we're inside the configured lookahead window after
+      // count 9. This is exactly the case the lookahead is designed for.
+      events.push(...this.tryLatePerfection(bars, i));
       return events;
     }
 
@@ -307,39 +321,54 @@ export class SequentialTracker {
           configHash: cfg.configHash,
         });
       }
-    } else if (this.setupPerfectionPending && this.setupBar9Index != null) {
-      // Late perfection check — bar i is within `lookaheadBars` of count 9.
-      // Read from the FROZEN indices so a reset in-between bars doesn't
-      // strand the lookahead.
-      const barsSince = i - this.setupBar9Index;
-      if (barsSince <= cfg.setup.perfection.lookaheadBars) {
-        if (
-          isLatePerfected(
-            bars,
-            this.completedSetupBarIndices,
-            dir,
-            i,
-            cfg.setup.perfection.mode,
-          )
-        ) {
-          this.setupPerfected = true;
-          this.setupPerfectionPending = false;
-          events.push({
-            indicator: "sequential",
-            eventType: "setup_perfected",
-            direction: dir,
-            count: cfg.setup.length,
-            barDate: bars[this.setupBar9Index]!.date,
-            firstKnownAtDate: date,
-            configHash: cfg.configHash,
-            meta: { late: true, lookaheadBars: barsSince },
-          });
-        }
-      } else {
-        this.setupPerfectionPending = false;
-      }
+    } else {
+      events.push(...this.tryLatePerfection(bars, i));
     }
 
+    return events;
+  }
+
+  /**
+   * Late-perfection check, factored out so it runs both when the in-progress
+   * count continues AND when the count breaks (which is in fact the more
+   * common case the lookahead is designed for — the Setup printed 9, then
+   * a reversal bar broke the next count, then a swing bar within
+   * `lookaheadBars` retroactively confirms perfection).
+   */
+  private tryLatePerfection(bars: Bar[], i: number): SignalEvent[] {
+    const events: SignalEvent[] = [];
+    const cfg = this.config;
+    if (!this.setupPerfectionPending) return events;
+    if (this.setupBar9Index == null) return events;
+
+    const barsSince = i - this.setupBar9Index;
+    if (barsSince > cfg.setup.perfection.lookaheadBars) {
+      this.setupPerfectionPending = false;
+      return events;
+    }
+
+    if (
+      isLatePerfected(
+        bars,
+        this.completedSetupBarIndices,
+        this.direction,
+        i,
+        cfg.setup.perfection.mode,
+      )
+    ) {
+      this.setupPerfected = true;
+      this.setupPerfectionPending = false;
+      events.push({
+        indicator: "sequential",
+        eventType: "setup_perfected",
+        direction: this.direction,
+        count: cfg.setup.length,
+        barDate: bars[this.setupBar9Index]!.date,
+        firstKnownAtDate: bars[i]!.date,
+        configHash: cfg.configHash,
+        meta: { late: true, lookaheadBars: barsSince },
+      });
+    }
     return events;
   }
 
@@ -448,6 +477,10 @@ export class SequentialTracker {
   stepCountdown(bars: Bar[], i: number): SignalEvent[] {
     const events: SignalEvent[] = [];
     if (!this.countdownActive) return events;
+    // Once 13 has printed, the Countdown is finished. Do NOT increment
+    // past 13 — caps at countdownLength. Recycle / cancellation will
+    // reset countdownActive when the engine wants a fresh tracker.
+    if (this.countdownComplete) return events;
     if (this.setupBar9Index == null || i <= this.setupBar9Index) return events;
 
     const cfg = this.config.sequential;
@@ -547,31 +580,50 @@ export class SequentialTracker {
     return events;
   }
 
-  /** Step 12: recycle if conditions are met. */
-  evaluateRecycle(bars: Bar[]): SignalEvent[] {
+  /**
+   * Step 12: recycle if conditions are met.
+   * `setupCompletedThisBar` is the engine's signal that a new Setup
+   * COMPLETED on this bar (count just hit `setup.length`), which is the
+   * only context the range-ratio trigger is well-defined in. The
+   * extension trigger fires when the in-progress count crosses the
+   * configured threshold.
+   *
+   * We also guard against firing the same recycle event repeatedly while
+   * the count keeps extending past the threshold via `recycledThisSetup`,
+   * which is cleared when a new Setup count starts (`setupCount` going 0→1)
+   * or when the countdown is cancelled.
+   */
+  evaluateRecycle(bars: Bar[], i: number, setupCompletedThisBar: boolean): SignalEvent[] {
     const events: SignalEvent[] = [];
     const cfg = this.config.sequential.recycle;
     if (!cfg.enabled) return events;
     if (!this.countdownActive) return events;
+    if (this.recycledThisSetup) return events;
     if (this.setupBar1Index == null || this.setupBar9Index == null) return events;
 
-    const newRange =
-      this.setupCompleted && this.setupExtensionCount > 0
-        ? calcSetupRange(bars, this.setupBar1Index, this.setupBar9Index)
-        : null;
+    let trigger: "extension" | "range_ratio" | null = null;
+    let newRange: number | null = null;
 
-    const trigger = evaluateRecycle({
-      setupExtensionCount: this.setupCount, // total count incl. extension
-      countThreshold: cfg.setupCountThreshold,
-      priorRange: this.priorSetupRange,
-      newRange,
-      rangeRatioMin: cfg.rangeRatioMin,
-      rangeRatioMax: cfg.rangeRatioMax,
-    });
+    // Extension trigger: in-progress same-direction Setup count has
+    // crossed the threshold (modern default: 22).
+    if (this.setupCount >= cfg.setupCountThreshold) {
+      trigger = "extension";
+    } else if (setupCompletedThisBar && this.priorSetupRange != null) {
+      // Range-ratio trigger: a NEW Setup just completed (overlapping the
+      // active Countdown). Compare its range to the prior Setup's range.
+      newRange = calcSetupRange(bars, this.setupBar1Index, this.setupBar9Index);
+      if (this.priorSetupRange > 0) {
+        const ratio = newRange / this.priorSetupRange;
+        if (ratio >= cfg.rangeRatioMin && ratio <= cfg.rangeRatioMax) {
+          trigger = "range_ratio";
+        }
+      }
+    }
 
     if (trigger == null) return events;
 
-    const date = bars[bars.length - 1]!.date;
+    // Stamp the event with the bar currently being processed.
+    const date = bars[i]!.date;
     events.push({
       indicator: "sequential",
       eventType: "setup_recycle",
@@ -588,6 +640,7 @@ export class SequentialTracker {
     });
 
     this.recycledThisBar = true;
+    this.recycledThisSetup = true;
     if (cfg.behavior === "reset_to_new_setup") {
       this.resetCountdown();
       // Keep the current Setup as the "new" anchor for the recycled run.
@@ -644,7 +697,9 @@ export class SequentialTracker {
       setupDirection: this.setupCount > 0 ? this.direction : null,
       setupCount: this.setupCount,
       setupPerfected: this.setupPerfected,
-      setupCompleted: this.setupCompleted && this.setupCount === this.config.setup.length,
+      // Read the persistent flag — `setupCount` may exceed `setup.length`
+      // when extension is allowed, but the Setup is still completed.
+      setupCompleted: this.setupCompleted,
       countdownDirection: this.countdownActive ? this.direction : null,
       countdownCount: this.countdownCount,
       countdownQualified: this.countdownQualified,
