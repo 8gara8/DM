@@ -10,7 +10,7 @@
  * (`HitRatePill`) handles `null` uniformly so this won't break.
  */
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db as defaultDb, type DB } from "@/lib/db/client";
 import {
   alerts as alertsTable,
@@ -127,8 +127,14 @@ export async function composeDashboardPayload(
   }
 
   // Just-printed: any ticker whose latest setup_complete / countdown_complete
-  // / signal_9_13_9 event has barDate >= mostRecentScan.startedAt
-  const recentlyPrintedSet = await loadRecentlyPrinted(db, meta.lastScanAt);
+  // / signal_9_13_9 event has barDate >= mostRecentScan.startedAt. Restricted
+  // to the current watchlist so accumulated signal_events from removed
+  // tickers don't bleed into today's rail.
+  const recentlyPrintedSet = await loadRecentlyPrinted(
+    db,
+    meta.lastScanAt,
+    tickers.map((t) => t.ticker),
+  );
 
   const justPrinted: TickerTile[] = [];
   const imminent: TickerTile[] = [];
@@ -235,7 +241,7 @@ async function loadStates(db: DB, tickers: { ticker: string }[]): Promise<States
   const rows = await db
     .select()
     .from(signalStatesTable)
-    .where(sql`ticker IN ${tickerSet}`);
+    .where(inArray(signalStatesTable.ticker, tickerSet));
   const states: SignalStateLite[] = rows.map((r) => ({
     ticker: r.ticker,
     timeframe: r.timeframe as Timeframe,
@@ -261,13 +267,15 @@ async function loadStates(db: DB, tickers: { ticker: string }[]): Promise<States
 async function loadRecentlyPrinted(
   db: DB,
   since: string | null,
+  watchlistSymbols: string[],
 ): Promise<Set<string>> {
-  if (!since) return new Set();
+  if (!since || watchlistSymbols.length === 0) return new Set();
   const rows = await db
     .select({ ticker: signalEventsTable.ticker })
     .from(signalEventsTable)
     .where(
       and(
+        inArray(signalEventsTable.ticker, watchlistSymbols),
         sql`${signalEventsTable.eventType} IN ('setup_complete','countdown_complete','signal_9_13_9')`,
         gte(signalEventsTable.barDate, since.slice(0, 10)),
       ),

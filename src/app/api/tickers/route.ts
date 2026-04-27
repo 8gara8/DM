@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { auth } from "@/server/auth";
 import { db } from "@/lib/db/client";
 import { signalStates, watchlistTickers } from "@/lib/db/schema";
@@ -30,11 +30,14 @@ export const GET = withErrors(async () => {
         eq(watchlistTickers.isActive, true),
       ),
     );
-  // Pull signal_states for the watchlist tickers
-  const states = rows.length
+  // Pull signal_states for the watchlist tickers ONLY — full-table reads
+  // get expensive once signal_states accumulates non-watchlist symbols.
+  const watchlistSymbols = rows.map((r) => r.ticker);
+  const states = watchlistSymbols.length
     ? await db
         .select()
         .from(signalStates)
+        .where(inArray(signalStates.ticker, watchlistSymbols))
     : [];
   const grouped = new Map<string, typeof states>();
   for (const s of states) {
