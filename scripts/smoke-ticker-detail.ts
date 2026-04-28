@@ -48,7 +48,7 @@ async function main() {
   for (let i = 0; i < 60; i++) {
     const date = new Date(startDate);
     date.setDate(date.getDate() + i);
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = date.toISOString().slice(0, 10);
 
     // Simulate realistic OHLC: slowly trending up
     const basePrice = 600 + i * 0.5;
