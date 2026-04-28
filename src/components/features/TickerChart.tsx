@@ -35,8 +35,6 @@ export type SignalEvent = {
   direction: "buy" | "sell" | null;
   eventType: string;
   count: number | null;
-  isPerfected: boolean;
-  isQualified: boolean;
   firstKnownAtDate: string;
   createdAt: string;
 };

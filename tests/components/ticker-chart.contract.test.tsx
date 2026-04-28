@@ -17,8 +17,6 @@ type SignalEvent = {
   direction: "buy" | "sell" | null;
   eventType: string;
   count: number | null;
-  isPerfected: boolean;
-  isQualified: boolean;
   firstKnownAtDate: string;
   createdAt: string;
 };
@@ -253,8 +251,6 @@ describe("TickerChart marker derivation", () => {
       direction: "buy",
       eventType: "setup_count",
       count: 3,
-      isPerfected: false,
-      isQualified: false,
       firstKnownAtDate: "2025-01-10",
       createdAt: new Date().toISOString(),
     };

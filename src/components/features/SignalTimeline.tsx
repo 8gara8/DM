@@ -20,8 +20,6 @@ export type SignalEvent = {
   direction: "buy" | "sell" | null;
   eventType: string;
   count: number | null;
-  isPerfected: boolean;
-  isQualified: boolean;
   firstKnownAtDate: string;
   createdAt: string;
 };
@@ -90,12 +88,12 @@ function TimelineRow({ event }: { event: SignalEvent }) {
 
         <span className="text-text flex-1">{eventLabel}</span>
 
-        {event.isPerfected && (
+        {event.eventType === "setup_perfected" && (
           <span className="px-2 py-0.5 text-xs rounded bg-buy-dim text-buy font-medium">
             perfected
           </span>
         )}
-        {event.isQualified && (
+        {event.eventType === "countdown_qualified" && (
           <span className="px-2 py-0.5 text-xs rounded bg-buy-dim text-buy font-medium">
             qualified
           </span>
