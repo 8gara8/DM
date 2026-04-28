@@ -33,9 +33,15 @@ async function main() {
   const client = createClient({ url: "file::memory:?cache=shared" });
   const db = drizzle(client, { schema }) as unknown as DB;
 
-  // Apply the Phase 3 migration so the tables exist
+  // Apply the Phase 3 migration so the tables exist.
+  // Glob-match the filename so the smoke survives drizzle-kit migration regenerations
+  // (the file was renamed from 0000_stale_wong.sql to 0000_concerned_purifiers.sql at one point).
   const fs = await import("fs/promises");
-  const migrationSql = await fs.readFile("./drizzle/0000_stale_wong.sql", "utf-8");
+  const path = await import("path");
+  const migrationDir = "./drizzle";
+  const candidates = (await fs.readdir(migrationDir)).filter((f) => f.match(/^0000_.*\.sql$/));
+  if (candidates.length === 0) throw new Error("no 0000_*.sql migration found in ./drizzle");
+  const migrationSql = await fs.readFile(path.join(migrationDir, candidates[0]!), "utf-8");
   for (const stmt of migrationSql.split("--> statement-breakpoint")) {
     const cleaned = stmt.trim();
     if (cleaned) await client.execute(cleaned);
