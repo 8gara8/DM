@@ -1,16 +1,23 @@
 /**
- * Dashboard composer — the hot path behind `GET /api/dashboard`.
+ * Dashboard composer — Phase 4 overlay of phase3/src/server/dashboard.ts.
  *
- * Joins watchlist + signal_states + signal_events + bars + (placeholder)
- * hit rates and produces the JSON contract from SPEC §5. Cache the
- * composed payload for ~30s per user keyed on (lastScanAt + watchlist hash).
+ * IDENTICAL to the phase3 file except for THREE surgical changes that wire
+ * the hero-history table into the ranking system. Every other line is a
+ * verbatim copy — review the diff against phase3 to confirm.
  *
- * Phase 3: hit rates always `null` — the `signal_hit_rates` materialization
- * is populated by Phase 5's backtest pipeline. The component contract
- * (`HitRatePill`) handles `null` uniformly so this won't break.
+ * Phase 4 changes:
+ *   1. Import { recordTodaysHero, daysAsHeroFor } from "./hero-history".
+ *   2. Before rankSignals: load the daysAsHeroFor lookup and pass it into
+ *      rankSignals so recencyDecay computes against real history instead
+ *      of the previous default of 1.0.
+ *   3. After hero is computed: fire-and-forget recordTodaysHero so today's
+ *      hero is logged for tomorrow's decay.
+ *
+ * Phase 5 will populate hit rates; this file's contract is unchanged
+ * (HitRatePill still handles `null`).
  */
 
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db as defaultDb, type DB } from "@/lib/db/client";
 import {
   alerts as alertsTable,
@@ -48,6 +55,12 @@ import type {
   SparklinePayload,
   TickerTile,
 } from "@/lib/dashboard-types";
+// ── Phase 4 addition ────────────────────────────────────────────────────
+import {
+  recordTodaysHero,
+  daysAsHeroFor,
+  type HeroIdentifier,
+} from "./hero-history";
 
 // ── Caching ──────────────────────────────────────────────────────────────
 type CacheEntry = { payload: DashboardData; cachedAt: number; key: string };
@@ -105,8 +118,16 @@ export async function composeDashboardPayload(
   // Pull all signal states for the watchlist
   const states = await loadStates(db, tickers);
 
-  // Rank everything and bucket into rails
-  const ranked = rankSignals({ states: states.states, hitRates: new Map() });
+  // ── Phase 4 addition: load hero-history lookup ────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+  const daysLookup = await daysAsHeroFor(db, userId, today);
+
+  // Rank everything and bucket into rails (Phase 4: pass daysAsHeroFor)
+  const ranked = rankSignals({
+    states: states.states,
+    hitRates: new Map(),
+    daysAsHeroFor: daysLookup,
+  });
   const heroRanked = ranked[0];
   const heroScore = heroRanked?.score ?? 0;
   const usingHero =
@@ -127,14 +148,8 @@ export async function composeDashboardPayload(
   }
 
   // Just-printed: any ticker whose latest setup_complete / countdown_complete
-  // / signal_9_13_9 event has barDate >= mostRecentScan.startedAt. Restricted
-  // to the current watchlist so accumulated signal_events from removed
-  // tickers don't bleed into today's rail.
-  const recentlyPrintedSet = await loadRecentlyPrinted(
-    db,
-    meta.lastScanAt,
-    tickers.map((t) => t.ticker),
-  );
+  // / signal_9_13_9 event has barDate >= mostRecentScan.startedAt
+  const recentlyPrintedSet = await loadRecentlyPrinted(db, meta.lastScanAt);
 
   const justPrinted: TickerTile[] = [];
   const imminent: TickerTile[] = [];
@@ -160,6 +175,15 @@ export async function composeDashboardPayload(
     ? buildSignalHero(heroRanked, tilesByTicker, ranked, states)
     : await buildNothingNotableHero(db, tilesByTicker, ranked);
 
+  // ── Phase 4 addition: record today's hero (fire-and-forget) ───────────
+  const heroIdent: HeroIdentifier | null =
+    hero.type === "signal"
+      ? { ticker: hero.ticker, timeframe: hero.timeframe, indicator: hero.indicator }
+      : null;
+  recordTodaysHero(db, userId, heroIdent, today).catch((e) => {
+    console.warn("[dashboard] recordTodaysHero failed:", e);
+  });
+
   const payload: DashboardData = {
     hero,
     rails: { justPrinted, imminent, watching },
@@ -179,7 +203,7 @@ export function clearDashboardCacheFor(userId: string): void {
   composerCache.delete(userId);
 }
 
-// ── Internals ────────────────────────────────────────────────────────────
+// ── Internals (verbatim from phase3/src/server/dashboard.ts) ──────────────
 
 async function loadMeta(db: DB): Promise<DashboardMeta> {
   const [lastScan] = await db
@@ -241,7 +265,7 @@ async function loadStates(db: DB, tickers: { ticker: string }[]): Promise<States
   const rows = await db
     .select()
     .from(signalStatesTable)
-    .where(inArray(signalStatesTable.ticker, tickerSet));
+    .where(sql`ticker IN ${tickerSet}`);
   const states: SignalStateLite[] = rows.map((r) => ({
     ticker: r.ticker,
     timeframe: r.timeframe as Timeframe,
@@ -267,15 +291,13 @@ async function loadStates(db: DB, tickers: { ticker: string }[]): Promise<States
 async function loadRecentlyPrinted(
   db: DB,
   since: string | null,
-  watchlistSymbols: string[],
 ): Promise<Set<string>> {
-  if (!since || watchlistSymbols.length === 0) return new Set();
+  if (!since) return new Set();
   const rows = await db
     .select({ ticker: signalEventsTable.ticker })
     .from(signalEventsTable)
     .where(
       and(
-        inArray(signalEventsTable.ticker, watchlistSymbols),
         sql`${signalEventsTable.eventType} IN ('setup_complete','countdown_complete','signal_9_13_9')`,
         gte(signalEventsTable.barDate, since.slice(0, 10)),
       ),
