@@ -93,7 +93,7 @@ export const GET = withErrors(async (req, ctx) => {
   if (isStale && refreshParam) {
     try {
       const provider = getDataProvider();
-      const freshDailyBars = await provider.getBars(symbol);
+      const freshDailyBars = await provider.fetchDailyBars(symbol);
 
       if (freshDailyBars.length > 0) {
         // Resample if needed
