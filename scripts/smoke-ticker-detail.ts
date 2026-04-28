@@ -173,14 +173,14 @@ async function main() {
 
   // Check bar ordering (ascending by date)
   for (let i = 1; i < payload.bars.length; i++) {
-    if (payload.bars[i].date < payload.bars[i - 1].date) {
+    if (payload.bars[i]!.date < payload.bars[i - 1]!.date) {
       throw new Error("Bars not sorted ascending by date");
     }
   }
 
   // Verify first and last bar dates
-  const firstBarDate = payload.bars[0].date;
-  const lastBarDate = payload.bars[payload.bars.length - 1].date;
+  const firstBarDate = payload.bars[0]!.date;
+  const lastBarDate = payload.bars[payload.bars.length - 1]!.date;
   if (firstBarDate !== "2024-11-16") {
     throw new Error(`Expected first bar 2024-11-16, got ${firstBarDate}`);
   }
@@ -189,7 +189,7 @@ async function main() {
   }
 
   // Check bar structure
-  const sampleBar = payload.bars[0];
+  const sampleBar = payload.bars[0]!;
   if (!("open" in sampleBar) || !("high" in sampleBar) || !("close" in sampleBar)) {
     throw new Error("Bar missing OHLC fields");
   }
@@ -199,8 +199,8 @@ async function main() {
     throw new Error(`Expected 3 events, got ${payload.events.length}`);
   }
 
-  if (payload.events[0].barDate !== "2025-01-14") {
-    throw new Error(`Expected most recent event on 2025-01-14, got ${payload.events[0].barDate}`);
+  if (payload.events[0]!.barDate !== "2025-01-14") {
+    throw new Error(`Expected most recent event on 2025-01-14, got ${payload.events[0]!.barDate}`);
   }
 
   // Check TDST lines
