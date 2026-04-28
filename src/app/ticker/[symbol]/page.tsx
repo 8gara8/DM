@@ -18,7 +18,6 @@ import { TickerChart } from "@/components/features/TickerChart";
 import { SignalTimeline } from "@/components/features/SignalTimeline";
 import { BacktestPanel } from "@/components/features/BacktestPanel";
 import { ScanButton } from "@/components/features/ScanButton";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { loadTickerDetail } from "@/server/ticker-detail";
 import type { Timeframe } from "@/engine/types";
@@ -82,7 +81,6 @@ export default async function TickerPage({ params, searchParams }: PageProps) {
     const changePercent = (change / previousBar.close) * 100;
 
     // Format price display
-    const priceStr = price.toFixed(2);
     const changeStr = `${change >= 0 ? "+" : ""}${change.toFixed(2)}`;
     const changePercentStr = `${change >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
     const changeColor = change >= 0 ? "text-buy" : "text-sell";

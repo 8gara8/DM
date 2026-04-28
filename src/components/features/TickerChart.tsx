@@ -67,7 +67,7 @@ function deriveMarkers(events: SignalEvent[]) {
 
     let text = "";
     let position: "aboveBar" | "belowBar" = "belowBar";
-    let shape: "circle" | "square" = "circle";
+    const shape: "circle" | "square" = "circle";
     let size: "small" | "large" = "small";
 
     // Determine direction and position

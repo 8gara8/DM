@@ -19,12 +19,12 @@
  * The ?refresh=1 opt-in forces the refetch synchronously for those who want it.
  */
 
-import { asc, eq, and, desc } from "drizzle-orm";
+import { asc, eq, and } from "drizzle-orm";
 import { auth } from "@/server/auth";
 import { db } from "@/lib/db/client";
 import { bars as barsTable } from "@/lib/db/schema";
 import { err, ok, withErrors } from "@/lib/api";
-import type { Bar, Timeframe } from "@/engine/types";
+import type { Bar } from "@/engine/types";
 import { getDataProvider } from "@/data/provider";
 import { resample } from "@/data/resample";
 
