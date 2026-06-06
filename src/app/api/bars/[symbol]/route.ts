@@ -19,7 +19,7 @@
  * The ?refresh=1 opt-in forces the refetch synchronously for those who want it.
  */
 
-import { asc, eq, and } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import { auth } from "@/server/auth";
 import { db } from "@/lib/db/client";
 import { bars as barsTable } from "@/lib/db/schema";
@@ -68,15 +68,20 @@ export const GET = withErrors(async (req, ctx) => {
     return err("BAD_REQUEST", `invalid symbol: ${symbol}`, 400);
   }
 
-  // Load cached bars
-  let cachedBars = await db
-    .select()
-    .from(barsTable)
-    .where(
-      and(eq(barsTable.ticker, symbol), eq(barsTable.timeframe, tfParam)),
-    )
-    .orderBy(asc(barsTable.date))
-    .limit(limitParam);
+  // Load the most-recent `limit` cached bars: order descending + limit, then
+  // reverse to ascending. Ascending-then-limit would return the OLDEST rows,
+  // so the staleness check and chart would use stale data for long-history
+  // tickers even when fresh bars exist.
+  let cachedBars = (
+    await db
+      .select()
+      .from(barsTable)
+      .where(
+        and(eq(barsTable.ticker, symbol), eq(barsTable.timeframe, tfParam)),
+      )
+      .orderBy(desc(barsTable.date))
+      .limit(limitParam)
+  ).reverse();
 
   // Check staleness
   const now = Date.now();
@@ -131,18 +136,20 @@ export const GET = withErrors(async (req, ctx) => {
             });
         }
 
-        // Reload bars post-upsert
-        cachedBars = await db
-          .select()
-          .from(barsTable)
-          .where(
-            and(
-              eq(barsTable.ticker, symbol),
-              eq(barsTable.timeframe, tfParam),
-            ),
-          )
-          .orderBy(asc(barsTable.date))
-          .limit(limitParam);
+        // Reload bars post-upsert (most-recent first, then reverse to ascending)
+        cachedBars = (
+          await db
+            .select()
+            .from(barsTable)
+            .where(
+              and(
+                eq(barsTable.ticker, symbol),
+                eq(barsTable.timeframe, tfParam),
+              ),
+            )
+            .orderBy(desc(barsTable.date))
+            .limit(limitParam)
+        ).reverse();
 
         isStale = false;
       }

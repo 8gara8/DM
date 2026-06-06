@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import type { IChartApi } from "lightweight-charts";
 import type { Bar } from "@/engine/types";
 
 export type SignalEvent = {
@@ -116,14 +117,15 @@ export function TickerChart({
   height,
 }: TickerChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const cancelledRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current || bars.length === 0) return;
 
-    // Reset cancelled flag for this effect run
-    cancelledRef.current = false;
+    // Effect-local cancellation + chart handle so a superseded run can never
+    // re-enable a newer run or leak a chart/listener — each run owns its own.
+    let cancelled = false;
+    let createdChart: IChartApi | null = null;
+    let handleFocusBar: ((evt: Event) => void) | null = null;
 
     // Map bars to candlestick data synchronously (needed before async import)
     const candleData = bars.map((b) => ({
@@ -134,17 +136,14 @@ export function TickerChart({
       close: b.close,
     }));
 
-    // Define cleanup function (will be returned synchronously)
-    let handleFocusBar: ((evt: Event) => void) | null = null;
-
     // Dynamically import lightweight-charts
     (async () => {
-      if (cancelledRef.current) return;
+      if (cancelled) return;
 
       try {
         const { createChart } = await import("lightweight-charts");
 
-        if (cancelledRef.current) return;
+        if (cancelled) return;
 
         // Get CSS variables for theming
         const computedStyle = getComputedStyle(document.documentElement);
@@ -176,10 +175,11 @@ export function TickerChart({
           },
         });
 
-        if (cancelledRef.current) {
+        if (cancelled) {
           chart.remove();
           return;
         }
+        createdChart = chart;
 
         // Add candlestick series
         const candleSeries = chart.addCandlestickSeries({
@@ -214,50 +214,50 @@ export function TickerChart({
           });
         }
 
-        // Add markers for signal events
-        const markers = deriveMarkers(events);
+        // Add markers for signal events. Lightweight Charts requires markers
+        // sorted ascending by time; events arrive newest-first from the loader.
+        const markers = deriveMarkers(events).sort((a, b) =>
+          a.time < b.time ? -1 : a.time > b.time ? 1 : 0,
+        );
         candleSeries.setMarkers(markers);
 
         // Fit content
         chart.timeScale().fitContent();
 
-        // Store reference for cleanup + focus event
-        chartRef.current = chart;
-
-        // Set up focus bar listener
+        // Set up focus bar listener. scrollToPosition's argument is the distance
+        // from the right edge to the latest bar (0 = latest at the right edge,
+        // negative = scrolled into history), so convert the absolute bar index.
         handleFocusBar = (evt: Event) => {
           const customEvt = evt as CustomEvent<{ barDate: string }>;
-          if (customEvt.detail?.barDate && chart.timeScale()) {
-            try {
-              chart.timeScale().scrollToPosition(
-                candleData.findIndex((d) => d.time === customEvt.detail.barDate),
-                false,
-              );
-            } catch {
-              // Bar not found or invalid position, silently skip
-            }
+          if (!customEvt.detail?.barDate) return;
+          const idx = candleData.findIndex((d) => d.time === customEvt.detail.barDate);
+          if (idx < 0) return;
+          try {
+            chart.timeScale().scrollToPosition(idx - (candleData.length - 1), false);
+          } catch {
+            // Invalid position, silently skip
           }
         };
 
-        if (!cancelledRef.current) {
-          window.addEventListener("dm:focus-bar", handleFocusBar);
-        }
+        if (cancelled) return;
+        window.addEventListener("dm:focus-bar", handleFocusBar);
       } catch (e) {
         console.error("[TickerChart] failed to initialize:", e);
       }
     })();
 
-    // Cleanup runs synchronously when effect unmounts
+    // Cleanup runs when this effect run is superseded or the component unmounts
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
 
       if (handleFocusBar) {
         window.removeEventListener("dm:focus-bar", handleFocusBar);
+        handleFocusBar = null;
       }
 
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
+      if (createdChart) {
+        createdChart.remove();
+        createdChart = null;
       }
     };
   }, [bars, events, tdstLines]);

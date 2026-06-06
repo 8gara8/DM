@@ -5,7 +5,7 @@
  * reuse these queries without duplication.
  */
 
-import { asc, desc, eq, and } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import { db as defaultDb, type DB } from "@/lib/db/client";
 import {
   bars as barsTable,
@@ -37,7 +37,9 @@ export async function loadTickerDetail(
   const db = opts.db ?? defaultDb;
   const limit = opts.limit ?? 500;
 
-  // Load bars ordered ascending by date
+  // Load the most-recent `limit` bars: order descending + limit, then reverse
+  // to ascending below. Ordering ascending before limiting would return the
+  // OLDEST bars and make the page show stale prices for long-history tickers.
   const bars = await db
     .select()
     .from(barsTable)
@@ -47,7 +49,7 @@ export async function loadTickerDetail(
         eq(barsTable.timeframe, timeframe),
       ),
     )
-    .orderBy(asc(barsTable.date))
+    .orderBy(desc(barsTable.date))
     .limit(limit);
 
   // Load events ordered descending (most recent first)
@@ -86,15 +88,18 @@ export async function loadTickerDetail(
     }
   }
 
-  // Map bar rows to narrow Bar shape (filter out volume if null)
-  const mappedBars: Bar[] = bars.map((row) => ({
-    date: row.date,
-    open: row.open,
-    high: row.high,
-    low: row.low,
-    close: row.close,
-    volume: row.volume ?? undefined,
-  }));
+  // Map bar rows to narrow Bar shape (volume omitted when null). Rows came back
+  // newest-first from the query above, so reverse to ascending for display.
+  const mappedBars: Bar[] = bars
+    .map((row) => ({
+      date: row.date,
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      volume: row.volume ?? undefined,
+    }))
+    .reverse();
 
   return { ticker: symbol, bars: mappedBars, events, tdstLines };
 }

@@ -46,13 +46,11 @@ function TimelineRow({ event }: { event: SignalEvent }) {
     window.dispatchEvent(customEvent);
   };
 
-  // Format date
-  const date = new Date(event.barDate);
-  const dateStr = date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  // Format date. barDate is a date-only exchange string (YYYY-MM-DD); format
+  // its components directly rather than via `new Date(...)`, which parses it as
+  // UTC midnight and shifts the displayed day back by one west of UTC.
+  const [year, month, day] = event.barDate.split("-");
+  const dateStr = `${month}/${day}/${year}`;
 
   // Determine indicator letter
   const indicator = event.indicator === "sequential" ? "S" : "C";
