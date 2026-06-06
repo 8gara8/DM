@@ -101,5 +101,14 @@ export async function loadTickerDetail(
     }))
     .reverse();
 
-  return { ticker: symbol, bars: mappedBars, events, tdstLines };
+  // Keep only events that fall within the loaded bar window. Bars are limited
+  // to the most-recent `limit`, so events older than the oldest loaded bar have
+  // no candle to mark or scroll to — including them would render timeline rows
+  // whose click-to-focus silently does nothing (idx < 0 in TickerChart).
+  const oldestBarDate = mappedBars[0]?.date;
+  const eventsInRange = oldestBarDate
+    ? events.filter((e) => e.barDate >= oldestBarDate)
+    : events;
+
+  return { ticker: symbol, bars: mappedBars, events: eventsInRange, tdstLines };
 }

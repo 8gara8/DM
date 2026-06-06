@@ -94,8 +94,10 @@ export const GET = withErrors(async (req, ctx) => {
     isStale = now - fetchedAt > threshold;
   }
 
-  // If stale and ?refresh=1, refetch from provider
-  if (isStale && refreshParam) {
+  // ?refresh=1 forces a synchronous refetch even when the cache is fresh (per
+  // the route contract above); without it we never block on the provider and
+  // just return cache (with a stale flag when applicable).
+  if (refreshParam) {
     try {
       const provider = getDataProvider();
       const freshDailyBars = await provider.fetchDailyBars(symbol);

@@ -224,18 +224,22 @@ export function TickerChart({
         // Fit content
         chart.timeScale().fitContent();
 
-        // Set up focus bar listener. scrollToPosition's argument is the distance
-        // from the right edge to the latest bar (0 = latest at the right edge,
-        // negative = scrolled into history), so convert the absolute bar index.
+        // Set up focus bar listener. Use logical indices (0 = oldest bar, which
+        // matches candleData's ascending order) rather than scrollToPosition,
+        // whose sign convention is easy to get wrong. Preserve the current zoom
+        // span and place the target bar just inside the right edge.
         handleFocusBar = (evt: Event) => {
           const customEvt = evt as CustomEvent<{ barDate: string }>;
           if (!customEvt.detail?.barDate) return;
           const idx = candleData.findIndex((d) => d.time === customEvt.detail.barDate);
           if (idx < 0) return;
           try {
-            chart.timeScale().scrollToPosition(idx - (candleData.length - 1), false);
+            const timeScale = chart.timeScale();
+            const current = timeScale.getVisibleLogicalRange();
+            const span = current && current.to > current.from ? current.to - current.from : 60;
+            timeScale.setVisibleLogicalRange({ from: idx - span + 1, to: idx + 1 });
           } catch {
-            // Invalid position, silently skip
+            // Invalid range, silently skip
           }
         };
 

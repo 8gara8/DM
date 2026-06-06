@@ -60,20 +60,39 @@ function TimelineRow({ event }: { event: SignalEvent }) {
   const arrow = event.direction === "buy" ? "▲" : "▼";
   const arrowColor = event.direction === "buy" ? "text-buy" : "text-sell";
 
-  // Event type label
+  // Event type label. Covers the full engine event vocabulary; any unmapped
+  // type falls back to a humanized string so a row is never rendered blank.
   let eventLabel = "";
   if (event.eventType === "setup_count") {
     eventLabel = `Setup ${event.count ?? "?"}`;
   } else if (event.eventType === "setup_complete") {
     eventLabel = "Setup complete";
+  } else if (event.eventType === "setup_perfected") {
+    eventLabel = "Setup perfected";
+  } else if (event.eventType === "setup_recycle") {
+    eventLabel = "Setup recycled";
+  } else if (event.eventType === "countdown_count") {
+    eventLabel = `Countdown ${event.count ?? "?"}`;
   } else if (event.eventType === "countdown_complete") {
     eventLabel = `Countdown ${event.count ?? "13"}`;
-  } else if (event.eventType === "signal_9_13_9") {
-    eventLabel = "Signal 9-13-9";
+  } else if (event.eventType === "countdown_qualified") {
+    eventLabel = "Countdown qualified";
   } else if (event.eventType === "countdown_deferred") {
     eventLabel = "Countdown deferred";
+  } else if (event.eventType === "countdown_cancel") {
+    eventLabel = "Countdown cancelled";
+  } else if (event.eventType === "signal_9_13_9") {
+    eventLabel = "Signal 9-13-9";
   } else if (event.eventType === "price_flip") {
     eventLabel = "Price flip";
+  } else if (event.eventType === "tdst_breach") {
+    eventLabel = "TDST breach";
+  } else if (event.eventType === "risk_level_breach") {
+    eventLabel = "Risk level breach";
+  } else {
+    eventLabel =
+      event.eventType.charAt(0).toUpperCase() +
+      event.eventType.slice(1).replace(/_/g, " ");
   }
 
   return (
