@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DM — DeMark Monitor (redesign mockup)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root{
+  /* surfaces */
+  --bg:#0a0d12; --panel:#11151c; --panel-2:#151a23;
+  --line:#212834; --line-soft:#1a212b;
+  /* text */
+  --text:#e9eef4; --muted:#8a94a3; --faint:#5b6470;
+  /* signal */
+  --buy:#34c98a;  --buy-dim:#1d6b4d;
+  --sell:#f25b53; --sell-dim:#7a322e;
+  --warn:#eaa83c; --warn-dim:#7a5a1f;
+  --slate:#71808f; --info:#5c9fe6;
+  /* type */
+  --mono:'IBM Plex Mono', ui-monospace, monospace;
+  --sans:'IBM Plex Sans', -apple-system, sans-serif;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font-family:var(--sans); padding:20px; -webkit-font-smoothing:antialiased;}
+
+.micro{font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--faint);}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex; align-items:baseline; gap:14px; margin-bottom:14px; flex-wrap:wrap;}
+.topbar h1{font-size:15px; font-weight:600; letter-spacing:.02em;}
+.topbar .scan{margin-left:auto;}
+.topbar .scan span{color:var(--faint); font-size:11px; font-family:var(--mono);}
+
+/* ---------- summary bar ---------- */
+.summary{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;}
+.sumchip{display:flex; align-items:center; gap:7px; background:var(--panel); border:1px solid var(--line-soft);
+  border-radius:6px; padding:7px 12px; cursor:pointer; user-select:none; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+.sumchip:hover{border-color:var(--line);}
+.sumchip.active{border-color:var(--slate); color:var(--text);}
+.sumchip .dot{width:7px; height:7px; border-radius:50%;}
+.sumchip .n{color:var(--text); font-weight:700;}
+
+/* ---------- grid ---------- */
+.grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(390px, 1fr)); gap:18px;}
+@media (max-width:480px){ .grid{grid-template-columns:1fr;} body{padding:12px;} }
+
+/* ---------- card ---------- */
+.card{position:relative; background:var(--panel); border:1px solid var(--line-soft); border-radius:10px;
+  padding:17px 17px 14px 20px; overflow:hidden;}
+.card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent,var(--slate));}
+.s-sell{--accent:var(--sell);} .s-buy{--accent:var(--buy);}
+.s-approaching{--accent:var(--warn);} .s-watch{--accent:var(--slate);}
+.s-neutral{--accent:var(--line);}
+.card > * + *{margin-top:13px;}
+.mod{border-top:1px solid var(--line-soft); padding-top:13px;}
+
+/* header */
+.hdr{display:flex; align-items:flex-start; gap:10px;}
+.hdr .sym{font-family:var(--mono); font-weight:700; font-size:15px;}
+.hdr .exch{font-family:var(--mono); font-size:9px; border:1px solid var(--line); border-radius:4px;
+  color:var(--muted); padding:1px 5px; position:relative; top:1px;}
+.hdr .name{font-size:11.5px; color:var(--muted); margin-top:2px;}
+.hdr .px{margin-left:auto; text-align:right;}
+.hdr .px .p{font-family:var(--mono); font-size:15px; font-weight:500;}
+.hdr .px .chg{font-family:var(--mono); font-size:11px; margin-top:2px;}
+.chg.up{color:var(--buy);} .chg.dn{color:var(--sell);}
+
+/* stale badge */
+.stale{position:absolute; top:0; right:0; font-family:var(--mono); font-size:9px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--warn); background:var(--panel-2); border-left:1px solid var(--line-soft);
+  border-bottom:1px solid var(--line-soft); border-radius:0 9px 0 7px; padding:3px 9px; opacity:.85;}
+
+/* verdict */
+.verdict .head{display:flex; align-items:baseline; gap:8px; font-weight:600; font-size:14.5px;}
+.verdict .arrow{font-family:var(--mono);}
+.v-sell{color:var(--sell);} .v-buy{color:var(--buy);} .v-approaching{color:var(--warn);}
+.v-watch{color:var(--slate);} .v-neutral{color:var(--muted);}
+.verdict .why{font-size:12px; color:var(--text); margin-top:4px; line-height:1.45;}
+.verdict .why em{color:var(--muted); font-style:normal;}
+
+/* bias meter */
+.bias{margin-top:10px;}
+.bias .track{position:relative; height:6px; border-radius:3px;
+  background:linear-gradient(90deg, var(--sell-dim), #2a2f38 48%, #2a2f38 52%, var(--buy-dim));}
+.bias .tick{position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--line);}
+.bias .marker{position:absolute; top:50%; width:11px; height:11px; border-radius:50%;
+  transform:translate(-50%,-50%); border:2px solid var(--bg); background:var(--accent,var(--slate));}
+.bias .lbls{display:flex; justify-content:space-between; margin-top:5px;}
+
+/* timeframe strip */
+.tfstrip{display:flex; gap:6px;}
+.tfcell{flex:1; display:flex; align-items:center; justify-content:center; gap:5px;
+  background:var(--panel-2); border:1px solid var(--line-soft); border-radius:6px;
+  padding:5px 4px; font-family:var(--mono); font-size:10.5px; color:var(--muted); cursor:pointer;}
+.tfcell:hover{border-color:var(--line);}
+.tfcell.sel{border-color:var(--slate); color:var(--text);}
+.tfcell .d{width:6px; height:6px; border-radius:50%; flex:none;}
+.d-sell{background:var(--sell);} .d-buy{background:var(--buy);} .d-approaching{background:var(--warn);}
+.d-watch{background:var(--slate);} .d-neutral{background:var(--line);}
+
+/* context chips */
+.chips{display:flex; gap:6px; flex-wrap:wrap;}
+.chip{font-family:var(--mono); font-size:10px; letter-spacing:.04em; border:1px solid var(--line);
+  border-radius:5px; padding:3px 8px; color:var(--muted);}
+.chip.warn{color:var(--warn); border-color:var(--warn-dim);}
+
+/* demark module */
+.dm .mrow{display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:10px; padding:4px 0;}
+.dm .mname{font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint);}
+.dm .mid{min-width:0;}
+.setupchip{font-family:var(--mono); font-size:10px; color:var(--muted); margin-bottom:4px;}
+.setupchip.buy{color:var(--buy);} .setupchip.sell{color:var(--sell);}
+.setupchip .perf{color:var(--info);}
+.segbar{display:flex; gap:2px;}
+.segbar .seg{flex:1; height:7px; border-radius:1.5px; background:var(--panel-2); border:1px solid var(--line-soft);}
+.segbar .seg.f-buy{background:var(--buy-dim); border-color:var(--buy-dim);}
+.segbar .seg.f-sell{background:var(--sell-dim); border-color:var(--sell-dim);}
+.segbar .seg.f-warn{background:var(--warn-dim); border-color:var(--warn-dim);}
+.segbar.done .seg.f-buy{background:var(--buy); border-color:var(--buy);}
+.segbar.done .seg.f-sell{background:var(--sell); border-color:var(--sell);}
+.statetag{font-family:var(--mono); font-size:10.5px; white-space:nowrap; color:var(--muted);}
+.statetag.sell{color:var(--sell);} .statetag.buy{color:var(--buy);} .statetag.warn{color:var(--warn);}
+.callout{font-family:var(--mono); font-size:10.5px; margin-top:7px; padding:5px 8px; border-radius:5px;
+  background:var(--panel-2); border:1px solid var(--line-soft);}
+.callout.sell{color:var(--sell);} .callout.buy{color:var(--buy);} .callout.recycle{color:var(--warn);}
+.detail-toggle{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--faint); background:none; border:none; cursor:pointer; margin-top:7px; padding:0;}
+.detail-toggle:hover{color:var(--muted);}
+.countgrid{display:none; margin-top:7px; gap:3px;}
+.countgrid.open{display:flex;}
+.countgrid .c{flex:1; text-align:center; font-family:var(--mono); font-size:9px; color:var(--faint);
+  border:1px solid var(--line-soft); border-radius:3px; padding:3px 0;}
+.countgrid .c.on{color:var(--text); background:var(--panel-2);}
+
+/* levels */
+.levels{display:flex; gap:10px;}
+.lvl{flex:1; background:var(--panel-2); border:1px solid var(--line-soft); border-radius:6px; padding:7px 10px;}
+.lvl .v{font-family:var(--mono); font-size:13px; margin-top:3px;}
+
+/* indicators */
+.inds{display:flex; flex-wrap:wrap; gap:5px;}
+.ind{font-family:var(--mono); font-size:10px; border:1px solid var(--line-soft); border-radius:4px;
+  padding:3px 7px; color:var(--faint);}
+.ind b{font-weight:500; color:var(--muted);}
+.ind.bull b{color:var(--buy);} .ind.bear b{color:var(--sell);}
+
+/* edge footer */
+.edge{display:flex; align-items:baseline; gap:8px; font-family:var(--mono); font-size:10.5px; color:var(--muted);}
+.edge .wr{font-weight:700; color:var(--text);}
+.edge.lowconf{color:var(--faint);} .edge.lowconf .wr{color:var(--sell); font-weight:500;}
+.edge .badge{font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--buy);
+  border:1px solid var(--buy-dim); border-radius:4px; padding:1px 6px;}
+.edge .upd{margin-left:auto; color:var(--faint); font-size:9.5px;}
+
+/* view toggle */
+.viewtoggle{display:flex; border:1px solid var(--line-soft); border-radius:6px; overflow:hidden;}
+.viewtoggle button{font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+  background:var(--panel); color:var(--faint); border:none; padding:5px 11px; cursor:pointer;}
+.viewtoggle button.on{background:var(--panel-2); color:var(--text);}
+
+/* signal age + NEW badge */
+.age{font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; color:var(--faint); font-weight:400; white-space:nowrap;}
+.age.new{color:var(--info); border:1px solid var(--info); border-radius:4px; padding:1px 5px;
+  text-transform:uppercase; font-size:8.5px; letter-spacing:.08em;}
+
+/* group separators */
+.groupsep{grid-column:1/-1; display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:9.5px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-top:4px;}
+.groupsep::after{content:''; flex:1; height:1px; background:var(--line-soft);}
+
+/* non-dominant method dimming */
+.mrow.dim{opacity:.5;}
+
+/* level distance-from-price */
+.lvl .dist{font-size:10px; color:var(--faint); margin-left:6px; font-weight:400;}
+
+/* momentum net read */
+.ind.mom{border-color:var(--line);}
+.ind.mom b.u{color:var(--buy);} .ind.mom b.d{color:var(--sell);}
+
+/* scan mode rows */
+.grid.scanmode{grid-template-columns:1fr; gap:8px;}
+.srow{position:relative; display:grid; grid-template-columns:160px minmax(0,1fr) 92px 78px 56px 74px;
+  align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line-soft);
+  border-radius:8px; padding:9px 14px 9px 17px; cursor:pointer; overflow:hidden;}
+.srow:hover{border-color:var(--line);}
+.srow::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent,var(--slate));}
+.srow .sym{font-family:var(--mono); font-weight:700; font-size:13px;}
+.srow .nm{font-size:10px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.srow .vd{font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.srow .dots{display:flex; gap:5px; justify-content:center;}
+.srow .dots .d{width:7px; height:7px; border-radius:50%;}
+.srow .ewr{font-family:var(--mono); font-size:11px; text-align:right; color:var(--muted);}
+.srow .ewr.lowconf{color:var(--sell); opacity:.7;}
+.srow .agec{text-align:right;}
+.bias.mini{margin-top:0;} .bias.mini .track{height:4px;}
+@media (max-width:640px){ .srow{grid-template-columns:120px minmax(0,1fr) 74px;}
+  .srow .biascol,.srow .dots,.srow .ewr{display:none;} }
+
+.footer-note{margin-top:26px; text-align:center; font-family:var(--mono); font-size:10px; color:var(--faint);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>DM · DeMark Monitor</h1>
+  <span class="micro">redesign mockup — sample data</span>
+  <div class="scan" style="display:flex; align-items:center; gap:12px;">
+    <div class="viewtoggle">
+      <button id="vt-cards" class="on" onclick="setView('cards')">cards</button>
+      <button id="vt-scan" onclick="setView('scan')">scan</button>
+    </div>
+    <span>last scan 06:00 TST · 2026-06-05</span>
+  </div>
+</div>
+
+<div class="summary" id="summary"></div>
+<div class="grid" id="grid"></div>
+
+<div class="footer-note">mockup renders from the §4 TickerSignal contract verbatim — view source: const DATA</div>
+
+<script>
+/* ============================================================
+   Sample data — exactly the §4 TickerSignal contract.
+   Six tickers covering every CardState + edge styling rule.
+   ============================================================ */
+const EMPTY_M = (dir="none") => ({direction:dir,
+  setup:{direction:dir,count:0,complete:false,perfected:false},
+  countdown:{count:0,complete:false,qualified:false}});
+/* NOTE — contract addition vs. the spec doc: `eventDate` (date the current state
+   was produced) added to TimeframeSignal. Drives the NEW badge + signal age. */
+const TF = (tf,state,bias,seq,cmb,comps=[],rec={occurred:false,atBar:null},tdst={kind:"support",value:0},risk=null,eventDate=null)=>(
+  {timeframe:tf,state,bias,sequential:seq,combo:cmb,composites:comps,recycling:rec,tdst,risk,eventDate});
+
+const DATA = [
+{ symbol:"GC=F", exchange:"US", name:"Gold Futures · Aug 26", price:3412.60, changeAbs:-28.40, changePct:-0.83,
+  primaryTimeframe:"daily",
+  verdict:{state:"sell", label:"Sell — exhaustion confirmed", arrow:"↓",
+    why:"Sequential 13 completed and qualified; 13-9-13 composite confirms. Weekly agrees."},
+  timeframes:{
+    daily: TF("daily","sell",-78,
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:true}, countdown:{count:13,complete:true,qualified:true}},
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:false}, countdown:{count:11,complete:false,qualified:false}},
+      [{type:"13-9-13",direction:"sell",complete:true}], {occurred:false,atBar:null},
+      {kind:"support",value:3318.2}, 3489.5, "2026-06-05"),
+    weekly: TF("weekly","sell",-52,
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:false}, countdown:{count:9,complete:false,qualified:false}},
+      EMPTY_M("sell"), [], {occurred:false,atBar:null}, {kind:"support",value:3105.0}, null),
+    monthly: TF("monthly","watch",-20,
+      {direction:"sell", setup:{direction:"sell",count:6,complete:false,perfected:false}, countdown:{count:0,complete:false,qualified:false}},
+      EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:2870.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:1985.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"76",tone:"bear"},{key:"MACD",value:"↓",tone:"bear"},{key:"EMA",value:"Bull",tone:"bull"},
+    {key:"W%R",value:"-8",tone:"bear"},{key:"Ichi",value:"Above",tone:"bull"},{key:"BB",value:"+2σ",tone:"neutral"},
+    {key:"ADX",value:"31",tone:"neutral"},{key:"VWAP",value:"+1.9%",tone:"bull"},{key:"Don",value:"Hi",tone:"neutral"},{key:"ATR",value:"42.1",tone:"neutral"}],
+  regime:{trending:true, adx:31},
+  edge:{winRate:92, avgReturn:4.21, profitFactor:33.9, sampleSize:12, lookback:"15yr", validated:true},
+  updated:"2026-06-05" },
+
+{ symbol:"0700", exchange:"HK", name:"Tencent Holdings", price:498.80, changeAbs:6.20, changePct:1.26,
+  primaryTimeframe:"daily",
+  verdict:{state:"approaching", label:"Sell — 1 bar from completion", arrow:"↓",
+    why:"Sequential countdown at 12 of 13. One qualifying close completes the signal — but weekly is on a buy."},
+  timeframes:{
+    daily: TF("daily","approaching",-55,
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:false}, countdown:{count:12,complete:false,qualified:false}},
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:false}, countdown:{count:8,complete:false,qualified:false}},
+      [], {occurred:false,atBar:null}, {kind:"support",value:462.4}, 512.0, "2026-06-05"),
+    weekly: TF("weekly","buy",35,
+      {direction:"buy", setup:{direction:"buy",count:9,complete:true,perfected:true}, countdown:{count:4,complete:false,qualified:false}},
+      EMPTY_M("buy"), [], {occurred:false,atBar:null}, {kind:"resistance",value:521.0}, null),
+    monthly: TF("monthly","neutral",5, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"resistance",value:545.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:310.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"64",tone:"neutral"},{key:"MACD",value:"↑",tone:"bull"},{key:"EMA",value:"Bull",tone:"bull"},
+    {key:"W%R",value:"-15",tone:"bear"},{key:"Ichi",value:"Above",tone:"bull"},{key:"ADX",value:"24",tone:"neutral"},
+    {key:"VWAP",value:"+0.8%",tone:"bull"},{key:"ATR",value:"11.3",tone:"neutral"}],
+  regime:{trending:true, adx:24},
+  edge:{winRate:71, avgReturn:2.10, profitFactor:2.4, sampleSize:17, lookback:"15yr", validated:true},
+  updated:"2026-06-05" },
+
+{ symbol:"NVDA", exchange:"US", name:"NVIDIA Corp", price:172.35, changeAbs:-4.91, changePct:-2.77,
+  primaryTimeframe:"daily",
+  verdict:{state:"buy", label:"Buy — perfected Setup 9", arrow:"↑",
+    why:"Buy Setup 9 completed and perfected; countdown building at 5 of 13. Oversold momentum confirms."},
+  timeframes:{
+    daily: TF("daily","buy",62,
+      {direction:"buy", setup:{direction:"buy",count:9,complete:true,perfected:true}, countdown:{count:5,complete:false,qualified:false}},
+      {direction:"buy", setup:{direction:"buy",count:9,complete:true,perfected:false}, countdown:{count:3,complete:false,qualified:false}},
+      [], {occurred:false,atBar:null}, {kind:"resistance",value:181.7}, 164.2, "2026-06-02"),
+    weekly: TF("weekly","watch",18,
+      {direction:"buy", setup:{direction:"buy",count:5,complete:false,perfected:false}, countdown:{count:0,complete:false,qualified:false}},
+      EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"resistance",value:195.0}, null),
+    monthly: TF("monthly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:128.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:75.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"28",tone:"bull"},{key:"MACD",value:"↓",tone:"bear"},{key:"EMA",value:"Bear",tone:"bear"},
+    {key:"W%R",value:"-86",tone:"bull"},{key:"Ichi",value:"Below",tone:"bear"},{key:"BB",value:"-2σ",tone:"neutral"},
+    {key:"ADX",value:"18",tone:"neutral"},{key:"VWAP",value:"-1.4%",tone:"bear"},{key:"ATR",value:"6.8",tone:"neutral"}],
+  regime:{trending:false, adx:18},
+  edge:{winRate:64, avgReturn:3.05, profitFactor:1.9, sampleSize:22, lookback:"15yr", validated:true},
+  updated:"2026-06-05" },
+
+{ symbol:"9988", exchange:"HK", name:"Alibaba Group", price:131.40, changeAbs:0.90, changePct:0.69,
+  primaryTimeframe:"daily",
+  verdict:{state:"watch", label:"Watch — buy count rebuilding", arrow:"·",
+    why:"Buy countdown was recycled at bar 8; count restarted and is now at 4 of 13. <em>No actionable signal yet.</em>"},
+  timeframes:{
+    daily: TF("daily","watch",28,
+      {direction:"buy", setup:{direction:"buy",count:9,complete:true,perfected:false}, countdown:{count:4,complete:false,qualified:false}},
+      EMPTY_M("buy"), [], {occurred:true,atBar:8}, {kind:"resistance",value:138.6}, null, "2026-06-01"),
+    weekly: TF("weekly","neutral",8, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:112.0}, null),
+    monthly: TF("monthly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:96.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:62.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"49",tone:"neutral"},{key:"MACD",value:"↑",tone:"bull"},{key:"EMA",value:"Bull",tone:"bull"},
+    {key:"W%R",value:"-44",tone:"neutral"},{key:"ADX",value:"14",tone:"neutral"},{key:"ATR",value:"3.2",tone:"neutral"}],
+  regime:{trending:false, adx:14},
+  edge:{winRate:50, avgReturn:0.85, profitFactor:1.1, sampleSize:2, lookback:"15yr", validated:false},
+  updated:"2026-06-05" },
+
+{ symbol:"TSM", exchange:"US", name:"Taiwan Semiconductor ADR", price:228.10, changeAbs:1.15, changePct:0.51,
+  primaryTimeframe:"daily",
+  verdict:{state:"neutral", label:"No signal", arrow:"·",
+    why:"No active setup or countdown on any tracked timeframe."},
+  timeframes:{
+    daily: TF("daily","neutral",5,
+      {direction:"buy", setup:{direction:"buy",count:2,complete:false,perfected:false}, countdown:{count:0,complete:false,qualified:false}},
+      EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:214.8}, null),
+    weekly: TF("weekly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:196.0}, null),
+    monthly: TF("monthly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:158.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:84.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"55",tone:"neutral"},{key:"MACD",value:"↑",tone:"bull"},{key:"EMA",value:"Bull",tone:"bull"},
+    {key:"ADX",value:"12",tone:"neutral"},{key:"ATR",value:"4.6",tone:"neutral"}],
+  regime:{trending:false, adx:12},
+  edge:{winRate:68, avgReturn:1.95, profitFactor:2.1, sampleSize:14, lookback:"15yr", validated:true},
+  updated:"2026-06-05" },
+
+{ symbol:"0981", exchange:"HK", name:"SMIC", price:42.85, changeAbs:-0.55, changePct:-1.27,
+  primaryTimeframe:"daily",
+  verdict:{state:"watch", label:"Watch — sell count building", arrow:"·",
+    why:"Sell countdown at 6 of 13. Backtest sample is too thin to weight this signal."},
+  timeframes:{
+    daily: TF("daily","watch",-25,
+      {direction:"sell", setup:{direction:"sell",count:9,complete:true,perfected:false}, countdown:{count:6,complete:false,qualified:false}},
+      EMPTY_M("sell"), [], {occurred:false,atBar:null}, {kind:"support",value:38.1}, null, "2026-06-03"),
+    weekly: TF("weekly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:33.0}, null),
+    monthly: TF("monthly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:24.0}, null),
+    yearly: TF("yearly","neutral",0, EMPTY_M(), EMPTY_M(), [], {occurred:false,atBar:null}, {kind:"support",value:14.0}, null)
+  },
+  indicators:[
+    {key:"RSI",value:"61",tone:"neutral"},{key:"MACD",value:"↑",tone:"bull"},{key:"W%R",value:"-18",tone:"bear"},
+    {key:"ADX",value:"21",tone:"neutral"},{key:"ATR",value:"1.4",tone:"neutral"}],
+  regime:{trending:false, adx:21},
+  edge:{winRate:0, avgReturn:-1.40, profitFactor:0, sampleSize:1, lookback:"1yr", validated:false},
+  updated:"2026-06-03" }
+];
+
+/* ============================================================
+   Render logic — implements §5, §6, §7
+   ============================================================ */
+const LAST_SCAN = "2026-06-05";                    // expected 06:00 TST scan date
+const URGENCY = {sell:0, approaching:1, buy:2, watch:3, neutral:4};
+const GROUP = {sell:"Sell signals", approaching:"Approaching", buy:"Buy signals", watch:"Building", neutral:"Quiet"};
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* signal age (vs last scan) → NEW badge or "Nd ago" */
+const daysAgo = d => d ? Math.round((new Date(LAST_SCAN) - new Date(d)) / 864e5) : null;
+function ageHtml(d){
+  const n = daysAgo(d);
+  if(n === null) return "";
+  return n <= 0 ? '<span class="age new">new</span>' : `<span class="age">${n}d ago</span>`;
+}
+
+/* momentum net read — leads the indicator strip */
+function momChip(t){
+  const nb = t.indicators.filter(i=>i.tone==="bull").length;
+  const ns = t.indicators.filter(i=>i.tone==="bear").length;
+  return `<span class="ind mom">Mom <b class="u">${nb}↑</b> <b class="d">${ns}↓</b></span>`;
+}
+
+/* §6.3 conflict detection */
+function conflicts(t){
+  const p = t.timeframes[t.primaryTimeframe];
+  const dir = p.state==="sell"||p.state==="approaching" ? "sell" : p.state==="buy" ? "buy" : "none";
+  if(dir==="none") return null;
+  // higher timeframe opposition
+  const order=["daily","weekly","monthly","yearly"];
+  for(const tf of order.slice(order.indexOf(t.primaryTimeframe)+1)){
+    const s=t.timeframes[tf].state;
+    if((dir==="sell"&&s==="buy")||(dir==="buy"&&(s==="sell"||s==="approaching")))
+      return `⚠ ${tf} ${s}`;
+  }
+  // momentum opposition (EMA/MACD agreement against the signal) — oversold confirms buys, skip
+  const ema=t.indicators.find(i=>i.key==="EMA"), macd=t.indicators.find(i=>i.key==="MACD");
+  if(ema&&macd){
+    const mom = ema.tone===macd.tone ? ema.tone : null;
+    if(dir==="sell"&&mom==="bull") return "⚠ momentum bull";
+    if(dir==="buy"&&mom==="bear"){
+      const wr=t.indicators.find(i=>i.key==="W%R"), rsi=t.indicators.find(i=>i.key==="RSI");
+      const oversold=(wr&&parseFloat(wr.value)<-80)||(rsi&&parseFloat(rsi.value)<30);
+      if(!oversold) return "⚠ momentum bear";
+    }
+  }
+  return null;
+}
+
+/* §5.6 one method row — `dim` de-emphasizes the non-dominant method */
+function methodRow(name, m, dim=false){
+  const d=m.direction, su=m.setup, cd=m.countdown;
+  let setupChip = "—";
+  if(su.count>0){
+    const cls = su.complete ? d : "";
+    setupChip = `<span class="setupchip ${cls}">Setup ${d==="buy"?"Buy":d==="sell"?"Sell":""} ${su.count}${su.complete?" ✓":""}${su.perfected?' <span class="perf">·perf</span>':""}</span>`;
+  } else setupChip = `<span class="setupchip">—</span>`;
+
+  const segs = Array.from({length:13},(_,i)=>{
+    let f="";
+    if(i<cd.count) f = cd.complete ? `f-${d}` : (cd.count===12 ? "f-warn" : `f-${d}`);
+    return `<span class="seg ${f}"></span>`;
+  }).join("");
+
+  let tag, tagCls="";
+  if(cd.complete){ tag=`${d==="sell"?"Sell":"Buy"} 13 ✓${cd.qualified?"":" ·unq"}`; tagCls=d; }
+  else if(cd.count===12){ tag="12/13 ⚠"; tagCls="warn"; }
+  else if(cd.count>0){ tag=`Building ${cd.count}/13`; }
+  else if(su.complete){ tag="Setup done"; }
+  else { tag="—"; }
+
+  return `<div class="mrow ${dim?"dim":""}">
+    <span class="mname">${name}</span>
+    <div class="mid">${setupChip}<div class="segbar ${cd.complete?"done":""}">${segs}</div></div>
+    <span class="statetag ${tagCls}">${tag}</span>
+  </div>`;
+}
+
+/* §5.6 DeMark module for one timeframe */
+function demarkModule(t, tf){
+  const s = t.timeframes[tf];
+  // dominant method = the row that produced the signal; dim the other
+  const score = m => m.countdown.complete ? 4 : m.countdown.count > 0 ? 2 + m.countdown.count/13
+    : m.setup.complete ? 1.5 : m.setup.count > 0 ? 1 : 0;
+  const sq = score(s.sequential), cb = score(s.combo);
+  let html = methodRow("Seq", s.sequential, sq < cb) + methodRow("Cmb", s.combo, cb < sq);
+  for(const c of s.composites)
+    html += `<div class="callout ${c.direction}">Composite ${c.type} ${c.complete?"✓":"…"} (${c.direction})</div>`;
+  if(s.recycling.occurred)
+    html += `<div class="callout recycle">↻ Countdown recycled at bar ${s.recycling.atBar}</div>`;
+  // count detail (behind tap)
+  const mk = m => Array.from({length:13},(_,i)=>`<span class="c ${i<m.countdown.count?"on":""}">${i+1}</span>`).join("");
+  html += `<button class="detail-toggle" onclick="this.nextElementSibling.classList.toggle('open')">count detail ▾</button>
+    <div class="countgrid">${mk(s.sequential)}</div>`;
+  return html;
+}
+
+/* §5 full card */
+function card(t){
+  const tf = t._tf || t.primaryTimeframe;
+  const s  = t.timeframes[tf];
+  const stale = t.updated < LAST_SCAN;
+  const cfl = conflicts(t);
+  const chgCls = t.changeAbs>=0?"up":"dn";
+  const sign = t.changeAbs>=0?"+":"";
+
+  const tfcells = ["daily","weekly","monthly","yearly"].map(k=>{
+    const st=t.timeframes[k]; if(!st) return "";
+    // S = setup count, C = countdown count — a DeMark trader treats these differently
+    const seq=st.sequential, best = seq.countdown.count>0
+      ? `C${seq.countdown.count}${seq.countdown.complete?"✓":""}`
+      : seq.setup.count>0 ? `S${seq.setup.count}${seq.setup.complete?"✓":""}` : "·";
+    return `<div class="tfcell ${k===tf?"sel":""}" onclick="setTf('${t.symbol}','${k}')">
+      <span class="d d-${st.state}"></span>${k[0].toUpperCase()} ${best}</div>`;
+  }).join("");
+
+  const dirInds = t.indicators.filter(i=>i.tone!=="neutral");
+  const indHtml = (list)=>list.map(i=>`<span class="ind ${i.tone}">${i.key} <b>${esc(i.value)}</b></span>`).join("");
+  // % distance from current price — makes levels readable without mental math
+  const dist = v => { const p=(v-t.price)/t.price*100; return `<span class="dist">${p>=0?"+":""}${p.toFixed(1)}%</span>`; };
+
+  const lowconf = t.edge.sampleSize<5 || t.edge.avgReturn<0;
+  const edgeHtml = `<div class="edge ${lowconf?"lowconf":""}">
+      <span class="wr">${t.edge.winRate}% win</span>
+      <span>${t.edge.avgReturn>=0?"+":""}${t.edge.avgReturn.toFixed(2)}% avg</span>
+      <span>PF ${t.edge.profitFactor.toFixed(1)} (${t.edge.sampleSize} trade${t.edge.sampleSize===1?"":"s"} · ${t.edge.lookback})</span>
+      ${t.edge.validated&&t.edge.profitFactor>=1.5?'<span class="badge">validated</span>':""}
+      <span class="upd num">${t.updated}</span>
+    </div>`;
+
+  return `<article class="card s-${t.verdict.state}" data-state="${t.verdict.state}" id="card-${t.symbol}">
+    ${stale?'<span class="stale">stale</span>':""}
+    <header class="hdr">
+      <div>
+        <span class="sym">${t.symbol}</span> <span class="exch">${t.exchange}</span>
+        <div class="name">${esc(t.name)}</div>
+      </div>
+      <div class="px">
+        <div class="p num">${t.price.toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+        <div class="chg ${chgCls}">${sign}${t.changeAbs.toFixed(2)} (${sign}${t.changePct.toFixed(2)}%)</div>
+      </div>
+    </header>
+
+    <div class="verdict">
+      <div class="head v-${t.verdict.state}"><span class="arrow">${t.verdict.arrow}</span>${esc(t.verdict.label)} ${ageHtml(t.timeframes[t.primaryTimeframe].eventDate)}</div>
+      <div class="why">${t.verdict.why}</div>
+      <div class="bias">
+        <div class="track"><span class="tick"></span><span class="marker" style="left:${50 + s.bias/2}%"></span></div>
+        <div class="lbls"><span class="micro">sell</span><span class="micro">buy</span></div>
+      </div>
+    </div>
+
+    <div class="tfstrip">${tfcells}</div>
+
+    <div class="chips">
+      <span class="chip">${t.regime.trending?"Trending":"Range-bound"} · ADX ${t.regime.adx}</span>
+      ${cfl?`<span class="chip warn">${cfl}</span>`:""}
+    </div>
+
+    <div class="mod dm">
+      <div class="micro" style="margin-bottom:6px">DeMark · ${tf}</div>
+      ${demarkModule(t, tf)}
+    </div>
+
+    <div class="mod levels">
+      <div class="lvl"><span class="micro">TDST ${s.tdst.kind}</span><div class="v num">${s.tdst.value.toLocaleString(undefined,{minimumFractionDigits:1})}${dist(s.tdst.value)}</div></div>
+      ${s.risk!=null?`<div class="lvl"><span class="micro">risk / stop</span><div class="v num">${s.risk.toLocaleString(undefined,{minimumFractionDigits:1})}${dist(s.risk)}</div></div>`:""}
+    </div>
+
+    <div class="mod">
+      <div class="inds" id="inds-${t.symbol}">${momChip(t)}${indHtml(dirInds)}</div>
+      <button class="detail-toggle" onclick="allInds('${t.symbol}')">all indicators ▾</button>
+    </div>
+
+    <div class="mod">${edgeHtml}</div>
+  </article>`;
+}
+
+/* scan mode — one compact row per ticker */
+function scanRow(t){
+  const s = t.timeframes[t.primaryTimeframe];
+  const dots = ["daily","weekly","monthly","yearly"].map(k=>
+    `<span class="d d-${t.timeframes[k].state}" title="${k}: ${t.timeframes[k].state}"></span>`).join("");
+  const lowconf = t.edge.sampleSize<5 || t.edge.avgReturn<0;
+  return `<div class="srow s-${t.verdict.state}" onclick="openCard('${t.symbol}')">
+    <div><span class="sym">${t.symbol}</span> <span class="exch">${t.exchange}</span><div class="nm">${esc(t.name)}</div></div>
+    <div class="vd v-${t.verdict.state}">${t.verdict.arrow} ${esc(t.verdict.label)}</div>
+    <div class="biascol"><div class="bias mini"><div class="track"><span class="tick"></span><span class="marker" style="left:${50+s.bias/2}%"></span></div></div></div>
+    <div class="dots">${dots}</div>
+    <div class="ewr ${lowconf?"lowconf":""}">${t.edge.winRate}%</div>
+    <div class="agec">${ageHtml(s.eventDate)}</div>
+  </div>`;
+}
+
+/* §7 summary bar + grid */
+let FILTER = null;
+let VIEW = "cards";
+function render(){
+  const sorted=[...DATA].sort((a,b)=>
+    URGENCY[a.verdict.state]-URGENCY[b.verdict.state] ||
+    Math.abs(b.timeframes[b.primaryTimeframe].bias)-Math.abs(a.timeframes[a.primaryTimeframe].bias));
+
+  const counts={};
+  for(const t of DATA) counts[t.verdict.state]=(counts[t.verdict.state]||0)+1;
+  const actionable=(counts.sell||0)+(counts.buy||0);
+  const chips=[
+    {key:null, label:"all", n:DATA.length, dot:"var(--slate)"},
+    {key:"actionable", label:"actionable", n:actionable, dot:"var(--sell)"},
+    {key:"approaching", label:"approaching", n:counts.approaching||0, dot:"var(--warn)"},
+    {key:"watch", label:"forming / watch", n:counts.watch||0, dot:"var(--slate)"},
+    {key:"neutral", label:"neutral", n:counts.neutral||0, dot:"var(--line)"}];
+  document.getElementById("summary").innerHTML=chips.map(c=>
+    `<div class="sumchip ${FILTER===c.key?"active":""}" onclick="setFilter(${c.key===null?"null":`'${c.key}'`})">
+       <span class="dot" style="background:${c.dot}"></span><span class="n">${c.n}</span> ${c.label}</div>`).join("");
+
+  const visible = sorted.filter(t=>{
+    if(FILTER===null) return true;
+    if(FILTER==="actionable") return t.verdict.state==="sell"||t.verdict.state==="buy";
+    return t.verdict.state===FILTER;
+  });
+
+  // group separators make the urgency sort legible
+  const grid = document.getElementById("grid");
+  grid.classList.toggle("scanmode", VIEW==="scan");
+  let html = "", last = null;
+  for(const t of visible){
+    if(t.verdict.state !== last){ html += `<div class="groupsep">${GROUP[t.verdict.state]}</div>`; last = t.verdict.state; }
+    html += VIEW==="scan" ? scanRow(t) : card(t);
+  }
+  grid.innerHTML = html;
+}
+function setFilter(k){ FILTER = (FILTER===k)?null:k; render(); }
+function setView(v){
+  VIEW = v;
+  document.getElementById("vt-cards").classList.toggle("on", v==="cards");
+  document.getElementById("vt-scan").classList.toggle("on", v==="scan");
+  render();
+}
+function openCard(sym){
+  setView("cards");
+  requestAnimationFrame(()=>{
+    const el=document.getElementById("card-"+sym);
+    if(el) el.scrollIntoView({behavior:"smooth", block:"center"});
+  });
+}
+function setTf(sym, tf){ const t=DATA.find(x=>x.symbol===sym); t._tf=tf; render(); }
+function allInds(sym){
+  const t=DATA.find(x=>x.symbol===sym);
+  document.getElementById("inds-"+sym).innerHTML = momChip(t) +
+    t.indicators.map(i=>`<span class="ind ${i.tone}">${i.key} <b>${esc(i.value)}</b></span>`).join("");
+}
+render();
+</script>
+</body>
+</html>
